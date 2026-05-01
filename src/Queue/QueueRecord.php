@@ -4,8 +4,7 @@ declare(strict_types=1);
 
 namespace ByLexus\DurableTask\Queue;
 
-final class QueueRecord
-{
+final class QueueRecord {
     public function __construct(
         public readonly ?int $taskId,
         public readonly string $taskClass,
@@ -26,7 +25,6 @@ final class QueueRecord
         public readonly \DateTimeImmutable $availableAt,
         public readonly ?\DateTimeImmutable $claimedAt,
         public readonly ?string $claimedBy,
-        public readonly int $lockVersion,
         public readonly ?string $lastErrorCode,
         public readonly ?string $lastErrorMessage,
         public readonly bool $cancelRequested,
@@ -59,7 +57,6 @@ final class QueueRecord
             new \DateTimeImmutable((string) $row['available_at']),
             self::nullableDateTime($row['claimed_at'] ?? null),
             isset($row['claimed_by']) ? (string) $row['claimed_by'] : null,
-            (int) $row['lock_version'],
             isset($row['last_error_code']) ? (string) $row['last_error_code'] : null,
             isset($row['last_error_message']) ? (string) $row['last_error_message'] : null,
             self::toBool($row['cancel_requested'] ?? false),
@@ -85,7 +82,7 @@ final class QueueRecord
             return $value;
         }
 
-        return json_decode($value, true, 512, JSON_THROW_ON_ERROR);
+        return json_decode($value, false, 512, JSON_THROW_ON_ERROR);
     }
 
     private static function toBool(mixed $value): bool {

@@ -28,10 +28,18 @@ final class PostgresIntegrationConnection
             );
         }
 
-        $pdo = new \PDO($dsn, $user, $password, [
+        $options = [
             \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
             \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
-        ]);
+        ];
+
+        $pgsqlPdoClass = 'Pdo\\Pgsql';
+
+        if (class_exists($pgsqlPdoClass)) {
+            $pdo = new $pgsqlPdoClass($dsn, $user, $password, $options);
+        } else {
+            $pdo = new \PDO($dsn, $user, $password, $options);
+        }
 
         return $pdo;
     }

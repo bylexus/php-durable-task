@@ -15,6 +15,7 @@ final class SchemaManagerTest extends TestCase
 
         self::assertStringContainsString('CREATE TABLE IF NOT EXISTS "custom_queue"', $ddl);
         self::assertStringContainsString('cleanup_at TIMESTAMPTZ NULL', $ddl);
+        self::assertStringContainsString('payload_json JSONB NULL', $ddl);
         self::assertStringContainsString('CREATE INDEX IF NOT EXISTS "custom_queue_cleanup_at_idx"', $ddl);
     }
 

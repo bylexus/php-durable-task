@@ -246,7 +246,11 @@ Execution coordination:
 - `available_at` timestamptz not null.
 - `claimed_at` timestamptz nullable.
 - `claimed_by` text nullable.
-- `lock_version` integer not null default `0`.
+
+Concurrency control:
+
+- Queue rows are protected through transaction-scoped PostgreSQL row locks.
+- Reads and writes for a single queue entry should happen in one locked transaction together.
 
 Diagnostics:
 

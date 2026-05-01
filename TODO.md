@@ -40,33 +40,33 @@
 
 ## Phase 5: Queue Operations
 
-- [ ] Implement enqueue.
-- [ ] Implement claim.
-- [ ] Implement transition persistence methods.
-- [ ] Implement notifications.
-- [ ] Implement expired task cleanup.
-- [ ] Add concurrency and cleanup integration tests.
-- [ ] Verify multiple runner processes cannot claim the same task at the same time.
-- [ ] Verify expired succeeded and failed task rows can be deleted safely without affecting active work.
+- [x] Implement enqueue.
+- [x] Implement claim.
+- [x] Implement transition persistence methods.
+- [x] Implement notifications.
+- [x] Implement expired task cleanup.
+- [x] Add concurrency and cleanup integration tests.
+- [x] Verify multiple runner processes cannot claim the same task at the same time.
+- [x] Verify expired succeeded and failed task rows can be deleted safely without affecting active work.
 
 ## Phase 6: Task And Step Contracts
 
-- [ ] Implement base `Task` and `Step` classes.
-- [ ] Implement direct task and step instantiation from persisted class names.
-- [ ] Define how queue records hydrate domain instances.
-- [ ] Add unit tests with example task and step classes.
-- [ ] Verify a queued record can be reconstructed into executable objects.
+- [x] Implement base `Task` and `Step` classes.
+- [x] Implement direct task and step instantiation from persisted class names.
+- [x] Define how queue records hydrate domain instances.
+- [x] Add unit tests with example task and step classes.
+- [x] Verify a queued record can be reconstructed into executable objects.
 
 ## Phase 7: Runner
 
-- [ ] Implement runner configuration.
-- [ ] Implement signal handling.
-- [ ] Implement single mode.
-- [ ] Implement loop mode.
-- [ ] Implement optional one-time schema bootstrap on runner startup, disabled by default.
-- [ ] Implement runtime, cancellation, and cleanup checks.
-- [ ] Add integration tests for normal execution, retries, shutdown behavior, and retention cleanup.
-- [ ] Verify the runner can process tasks end-to-end and stop predictably.
+- [x] Implement runner configuration.
+- [x] Implement signal handling.
+- [x] Implement single mode.
+- [x] Implement loop mode.
+- [x] Implement optional one-time schema bootstrap on runner startup, disabled by default.
+- [x] Implement runtime, cancellation, and cleanup checks.
+- [x] Add integration tests for normal execution, retries, shutdown behavior, and retention cleanup.
+- [x] Verify the runner can process tasks end-to-end and stop predictably.
 
 ## Phase 8: Examples And Documentation
 
@@ -80,13 +80,19 @@
 
 ## V1 Acceptance
 
-- [ ] Verify a task can be enqueued with a payload.
+- [x] Verify a task can be enqueued with a payload.
 - [ ] Verify the queue schema can be created on an empty PostgreSQL database through explicit bootstrap.
-- [ ] Verify the runner can optionally perform a one-time startup bootstrap when configured.
+- [x] Verify the runner can optionally perform a one-time startup bootstrap when configured.
 - [ ] Verify one or more runner processes can safely claim and execute tasks.
 - [ ] Verify task state remains durable across runner restarts.
-- [ ] Verify a failed step is retried according to metadata.
-- [ ] Verify exhausted retries result in terminal task failure.
-- [ ] Verify cancellation is persisted and stops further workflow progression.
-- [ ] Verify succeeded and failed task rows are deleted after their configured cleanup timeout.
+- [x] Verify a failed step is retried according to metadata.
+- [x] Verify exhausted retries result in terminal task failure.
+- [x] Verify cancellation is persisted and stops further workflow progression.
+- [x] Verify succeeded and failed task rows are deleted after their configured cleanup timeout.
 - [ ] Verify end-to-end tests cover the main lifecycle paths.
+
+
+## Arbitary notes
+
+- add logger infrastructure
+- add appendPayload function to add something to an existing payload

@@ -6,6 +6,24 @@
 			"matchCommandLine": true
 		},
 		"unsetopt": true,
-		"./vendor/bin/phpunit": true
+		"./vendor/bin/phpunit": true,
+		"set": true,
+		"vendor/bin/phpunit": true,
+		"/^unsetopt correct && set -a && source \\.env && set \\+a && vendor/bin/phpunit --configuration phpunit\\.xml tests/TaskTest\\.php tests/Integration/PostgresQueueIntegrationTest\\.php$/": {
+			"approve": true,
+			"matchCommandLine": true
+		},
+		"/^unsetopt correct && set -a && source \\.env && set \\+a && vendor/bin/phpunit --configuration phpunit\\.xml$/": {
+			"approve": true,
+			"matchCommandLine": true
+		},
+		"/^unsetopt correct && set -a && source \\.env && set \\+a && vendor/bin/phpunit --configuration phpunit\\.xml tests/Integration/RunnerIntegrationTest\\.php$/": {
+			"approve": true,
+			"matchCommandLine": true
+		},
+		"/^unsetopt correct && set -a && source \\.env && set \\+a && vendor/bin/phpunit --configuration phpunit\\.xml tests/TaskTest\\.php tests/SchemaManagerTest\\.php tests/Integration/SchemaManagerIntegrationTest\\.php tests/Integration/PostgresQueueIntegrationTest\\.php tests/Integration/RunnerIntegrationTest\\.php$/": {
+			"approve": true,
+			"matchCommandLine": true
+		}
 	}
 }

@@ -24,6 +24,7 @@ final class SchemaManagerIntegrationTest extends TestCase
 
             self::assertTrue($schemaManager->tableExists());
             self::assertTrue($this->columnExists($pdo, $tableName, 'cleanup_at'));
+            self::assertTrue($this->columnAllowsNulls($pdo, $tableName, 'payload_json'));
             self::assertTrue($this->taskIdIsIdentityColumn($pdo, $tableName));
         } finally {
             PostgresIntegrationConnection::dropTableIfExists($pdo, $tableName);
@@ -46,6 +47,7 @@ final class SchemaManagerIntegrationTest extends TestCase
             self::assertTrue($schemaManager->tableExists());
             $schemaManager->validate();
             self::assertTrue($this->columnExists($pdo, $tableName, 'cleanup_at'));
+            self::assertTrue($this->columnAllowsNulls($pdo, $tableName, 'payload_json'));
             self::assertTrue($this->taskIdIsIdentityColumn($pdo, $tableName));
             self::assertTrue($this->indexExists($pdo, sprintf('%s_cleanup_at_idx', $tableName)));
         } finally {
@@ -108,6 +110,22 @@ final class SchemaManagerIntegrationTest extends TestCase
         }
 
         return $row['is_identity'] === 'YES' && $row['identity_generation'] === 'BY DEFAULT';
+    }
+
+    private function columnAllowsNulls(\PDO $pdo, string $tableName, string $columnName): bool {
+        $statement = $pdo->prepare(
+            'SELECT is_nullable
+                FROM information_schema.columns
+                WHERE table_schema = current_schema()
+                  AND table_name = :table_name
+                  AND column_name = :column_name',
+        );
+        $statement->execute([
+            'table_name' => $tableName,
+            'column_name' => $columnName,
+        ]);
+
+        return $statement->fetchColumn() === 'YES';
     }
 
     private function indexExists(\PDO $pdo, string $indexName): bool {

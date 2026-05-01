@@ -10,6 +10,11 @@ services:
             - POSTGRES_DB=${TEST_DATABASE_NAME:-postgres}
         volumes:
             - testdb:/var/lib/postgresql/data
+    mail:
+        image: axllent/mailpit
+        ports:
+            - "8025:8025"
+            - "1025:1025"
 
 volumes:
-  testdb: {}
+    testdb: {}
