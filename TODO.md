@@ -11,21 +11,21 @@
 
 ## Phase 2: Core Domain Types
 
-- [ ] Implement task and step status enums.
-- [ ] Implement the retry mode enum.
-- [ ] Implement `StepResult` and `ErrorInfo`.
-- [ ] Add tests for result and enum behavior.
-- [ ] Verify the core value objects are stable and tested.
+- [x] Implement task and step status enums.
+- [x] Implement the retry mode enum.
+- [x] Implement `StepResult` and `ErrorInfo`.
+- [x] Add tests for result and enum behavior.
+- [x] Verify the core value objects are stable and tested.
 
 ## Phase 3: Attributes And Metadata
 
-- [ ] Implement `CleanupAfter`, `RetryMode`, `Retries`, and `MaxRuntime` attributes.
-- [ ] Implement metadata DTOs.
-- [ ] Implement metadata resolver and cache.
-- [ ] Add validation tests.
-- [ ] Verify invalid metadata fails early.
-- [ ] Verify precedence rules are covered by tests.
-- [ ] Verify task cleanup retention can be resolved from task metadata.
+- [x] Implement `CleanupAfter`, `RetryMode`, `Retries`, and `MaxRuntime` attributes.
+- [x] Implement metadata DTOs.
+- [x] Implement metadata resolver and cache.
+- [x] Add validation tests.
+- [x] Verify invalid metadata fails early.
+- [x] Verify precedence rules are covered by tests.
+- [x] Verify task cleanup retention can be resolved from task metadata.
 
 ## Phase 4: Queue Schema And Records
 

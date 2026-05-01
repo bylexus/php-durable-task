@@ -4,6 +4,8 @@
 		"/^php -v \\| head -n 1$/": {
 			"approve": true,
 			"matchCommandLine": true
-		}
+		},
+		"unsetopt": true,
+		"./vendor/bin/phpunit": true
 	}
 }
