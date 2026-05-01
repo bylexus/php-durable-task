@@ -68,7 +68,7 @@ So a specific task can be defined and executed:
 class MailInfoTask extends Task {
     public function __construct(MailService $mail) { /* ... */ }
     public function nextStep(?Step $act = null): ?Step {
-       /** decide which step to execute next: */ 
+       /** decide which step to execute next: */
        return new SendMailStep($this->mail, $this->getPayload()->to, $this->getPayload()->subject, $this->getPayload()->body);
     }
 }
@@ -112,7 +112,7 @@ class Step {
     public function cancel(string $reason, ?bool $failed = true)
     public function getRuntime(): \DateInterval;
 
-    // Here is where the specific work for this step is executed. It must result in a Step result (no exceptions).
+    // Here is where the specific work for this step is executed. It must result in a Step result (or an exception)
     abstract public function execute(): \StepResult;
 }
 ```
@@ -150,9 +150,9 @@ The following set of columns might be necessary:
 - step class
 - step status
 - task started timestamp
-- step started timestamp 
+- step started timestamp
 - task end timestamp
-- step end timestamp 
+- step end timestamp
 - payload (json, arbitary data)
 - result (json, e.g. errors etc.)
 

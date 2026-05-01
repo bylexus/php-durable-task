@@ -1,0 +1,12 @@
+<?php
+
+declare(strict_types=1);
+
+use ByLexus\DurableTask\Queue\QueueConfiguration;
+use ByLexus\DurableTask\Queue\SchemaManager;
+
+require dirname(__DIR__) . '/vendor/autoload.php';
+
+$tableName = $argv[1] ?? QueueConfiguration::DEFAULT_TABLE_NAME;
+
+fwrite(STDOUT, SchemaManager::exportDdl(new QueueConfiguration($tableName)));

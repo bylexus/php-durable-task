@@ -29,12 +29,14 @@
 
 ## Phase 4: Queue Schema And Records
 
-- [ ] Implement queue record representation.
-- [ ] Implement schema manager.
-- [ ] Implement queue configuration.
-- [ ] Add schema bootstrap integration tests.
-- [ ] Verify an empty PostgreSQL database can be bootstrapped idempotently.
-- [ ] Verify the queue schema includes the cleanup deadline column used for terminal row retention.
+- [x] Implement queue record representation.
+- [x] Implement schema manager.
+- [x] Implement queue configuration.
+- [x] Add schema bootstrap integration tests.
+- [x] Add a support path to dump the required schema DDL.
+- [x] Verify an empty PostgreSQL database can be bootstrapped idempotently.
+- [x] Verify the queue schema includes the cleanup deadline column used for terminal row retention.
+- [x] Verify schema bootstrap runs only once at startup or explicitly by the user, not before every database call.
 
 ## Phase 5: Queue Operations
 
@@ -61,6 +63,7 @@
 - [ ] Implement signal handling.
 - [ ] Implement single mode.
 - [ ] Implement loop mode.
+- [ ] Implement optional one-time schema bootstrap on runner startup, disabled by default.
 - [ ] Implement runtime, cancellation, and cleanup checks.
 - [ ] Add integration tests for normal execution, retries, shutdown behavior, and retention cleanup.
 - [ ] Verify the runner can process tasks end-to-end and stop predictably.
@@ -70,13 +73,16 @@
 - [ ] Add one example workflow.
 - [ ] Document installation and runner usage.
 - [ ] Document attribute behavior.
+- [ ] Document schema bootstrap options and DDL export usage.
 - [ ] Document operational constraints and non-goals.
 - [ ] Verify a new user can understand the mental model and run the example locally.
+- [ ] Verify a new user can understand how to create the schema through explicit bootstrap or exported DDL.
 
 ## V1 Acceptance
 
 - [ ] Verify a task can be enqueued with a payload.
-- [ ] Verify the queue schema bootstraps automatically on an empty PostgreSQL database.
+- [ ] Verify the queue schema can be created on an empty PostgreSQL database through explicit bootstrap.
+- [ ] Verify the runner can optionally perform a one-time startup bootstrap when configured.
 - [ ] Verify one or more runner processes can safely claim and execute tasks.
 - [ ] Verify task state remains durable across runner restarts.
 - [ ] Verify a failed step is retried according to metadata.

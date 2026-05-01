@@ -35,7 +35,7 @@ The first version should not attempt to solve these concerns:
 - Queue claiming uses PostgreSQL row locking with `FOR UPDATE SKIP LOCKED`.
 - The library bootstraps the queue table automatically if it does not exist.
 - Baseline statuses are `queued`, `running`, `succeeded`, `failed`, and `cancelled`.
-- `StepResult` is the standard result contract for step execution.
+- `StepResult` is the standard result contract for step execution. A Step may also end in an Exception, which is catched by the Runner.
 - Runner timing uses documented sensible defaults rather than requiring configuration for all values.
 - Payload updates: prefer full payload replacement in V1, because patch semantics add complexity and edge cases. Yes, true for V1.
 - Metadata persistence: Persisting class names are sufficient, no other metadata needed.
@@ -278,6 +278,29 @@ At minimum:
 Important constraint:
 
 - Bootstrap must not silently mutate incompatible existing schemas. If the schema shape is wrong, fail early with a clear configuration error.
+
+### Schema Bootstrap Execution Strategy
+
+The open question is not whether the schema can be created by `SchemaManager`, but when that bootstrap should actually run.
+
+Options considered:
+
+- The user calls `SchemaManager` explicitly at setup or deployment time.
+- Depending classes verify and bootstrap the schema before every database operation.
+- The library provides a support script that only dumps the required DDL statements for external execution.
+
+Planned V1 approach:
+
+- Do not run schema verification automatically before every database operation. Lower-level queue or task code must not trigger repetitive schema checks on each call.
+- Support explicit bootstrap through `SchemaManager::bootstrap()` as the primary mechanism. The user can/must call it manually during setup, deployment, or application startup.
+- Allow the runner to call `SchemaManager::bootstrap()` once when the runner process starts, because that is a single startup check rather than a repeated per-operation cost. But make it configurable (default: not run)
+- Also provide a support script or helper that dumps the required DDL statements, so users who prefer manual migrations can apply the schema outside the runtime path.
+
+Recommended usage:
+
+- Production: prefer explicit schema creation through a deployment step or exported DDL.
+- Development or simple setups: allow the runner to perform a one-time startup bootstrap.
+
 
 ### Cleanup Strategy
 
@@ -633,11 +656,13 @@ Exit criteria:
 2. Implement schema manager.
 3. Implement queue configuration.
 4. Add schema bootstrap integration tests.
+5. Add a support path to dump the required schema DDL.
 
 Exit criteria:
 
 - Empty PostgreSQL database can be bootstrapped idempotently.
 - Queue schema includes the cleanup deadline column used for terminal row retention.
+- Schema bootstrap is executed once at startup or explicitly by the user, not before every database call.
 
 ### Phase 5: Queue Operations
 
@@ -682,18 +707,20 @@ Exit criteria:
 1. Add one example workflow.
 2. Document installation and runner usage.
 3. Document attribute behavior.
-4. Document operational constraints and non-goals.
+4. Document schema bootstrap options and DDL export usage.
+5. Document operational constraints and non-goals.
 
 Exit criteria:
 
 - A new user can understand the mental model and run the example locally.
+- A new user can understand how to create the schema, whether through explicit bootstrap or exported DDL.
 
 ## Acceptance Criteria For V1
 
 V1 is ready when all of the following are true:
 
 - A task can be enqueued with a payload.
-- The queue schema bootstraps automatically on an empty PostgreSQL database.
+- The queue schema can be created on an empty PostgreSQL database through explicit bootstrap, and the runner may perform a one-time startup bootstrap.
 - One or more runner processes can safely claim and execute tasks.
 - Task state remains durable across runner restarts.
 - A failed step is retried according to metadata.
