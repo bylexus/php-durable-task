@@ -83,7 +83,7 @@ final class PostgresQueueIntegrationTest extends TestCase
         }
     }
 
-    public function testEnqueueStoresNullPayloadButHydratesObjectView(): void {
+    public function testEnqueueNormalizesMissingPayloadToObject(): void {
         $pdo = PostgresIntegrationConnection::requirePdo($this);
         $tableName = PostgresIntegrationConnection::uniqueTableName();
 
@@ -95,12 +95,16 @@ final class PostgresQueueIntegrationTest extends TestCase
             $task = new QueueWorkflowTaskFixture();
             $record = $task->enqueue($pdo, $configuration);
 
-            self::assertNull($record->payload);
+            self::assertInstanceOf(\stdClass::class, $record->payload);
 
             $rehydratedTask = Task::fromQueueRecord($record);
 
             self::assertInstanceOf(\stdClass::class, $rehydratedTask->getPayload());
-            self::assertInstanceOf(\stdClass::class, $rehydratedTask->actualStep()?->getPayload());
+            self::assertInstanceOf(QueueWorkflowTaskFixture::class, $rehydratedTask);
+            self::assertInstanceOf(
+                \ByLexus\DurableTask\Tests\Fixture\QueueWorkflowStepFixture::class,
+                $rehydratedTask->actualStep(),
+            );
         } finally {
             PostgresIntegrationConnection::dropTableIfExists($pdo, $tableName);
         }

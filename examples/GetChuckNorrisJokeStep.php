@@ -4,20 +4,20 @@ use ByLexus\DurableTask\Enum\StepStatus;
 use ByLexus\DurableTask\Result\ErrorInfo;
 use ByLexus\DurableTask\Result\StepResult;
 use ByLexus\DurableTask\Step;
+use ByLexus\DurableTask\Task;
 
 class GetChuckNorrisJokeStep extends Step {
-    public function execute(): StepResult {
+    public function execute(Task $task): StepResult {
         try {
-            $payload = $this->getPayload();
             $json = file_get_contents('https://api.chucknorris.io/jokes/random');
             $joke = json_decode($json);
-            $payload->joke = $joke;
+            $task->getPayload(static::class)->joke = $joke->value ?? '(oops)';
             if (!empty($joke)) {
-                return new StepResult(StepStatus::SUCCEEDED, $payload);
+                return new StepResult(StepStatus::SUCCEEDED);
             }
             throw new Error('Cannot read Chuck Norris Joke', 500);
         } catch (Throwable $t) {
-            return new StepResult(StepStatus::FAILED, null, new ErrorInfo($t->getCode(), $t->getMessage()));
+            return StepResult::failed(new ErrorInfo($t->getCode(), $t->getMessage()));
         }
     }
 }

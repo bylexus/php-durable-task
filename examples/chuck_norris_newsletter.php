@@ -11,5 +11,6 @@ $sm = new SchemaManager($conn);
 $sm->bootstrap();
 
 $task = new ChuckNorrisNewsletterTask();
-$task->setPayload(['to' => 'alex@alexi.ch', 'from' => 'chuck@norris.com']);
+$task->setTo('alex@alexi.ch');
+$task->setFrom('chuck@norris.com');
 $task->enqueue($conn);

@@ -91,8 +91,20 @@
 - [x] Verify succeeded and failed task rows are deleted after their configured cleanup timeout.
 - [ ] Verify end-to-end tests cover the main lifecycle paths.
 
+## Task-Owned Payload Refactor
+
+- [x] Refactor `src/Step.php` so `Step` no longer uses `HasPayloadAccess`, no longer stores payload state, and executes via `execute(Task $task): StepResult`.
+- [x] Refactor `src/Task.php` so the task is the only payload owner and `updateStep()` persists the already-mutated task payload after each step execution.
+- [x] Update `src/Runner.php` so every execution path passes the task into the step, never reads payload from the step object, and always persists the task payload after execution.
+- [x] Inline the task-only payload API into `src/Task.php` and keep `src/PayloadNormalizer.php` as the dedicated normalization helper.
+- [x] Remove payload state from `src/Result/StepResult.php` so it carries only outcome and diagnostics.
+- [x] Remove step-payload handoff assumptions from the runner transition logic and step hydration path that treated the step as a payload owner.
+- [x] Update all step fixtures under `tests/Fixture/` to `execute(Task $task): StepResult` and replace `$this->getPayload()` access with `$task->getPayload()`.
+- [x] Update all example steps and helper tasks under `examples/` to the task-owned payload model and remove direct payload writes to step instances.
+- [x] Rewrite unit and integration assertions that currently inspect payload through `actualStep()` so they validate task-owned payload behavior instead.
+
 
 ## Arbitary notes
 
 - add logger infrastructure
-- add appendPayload function to add something to an existing payload
+- during singal shutdown, cleanup quueue: running tasks should be reset to queued

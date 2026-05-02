@@ -21,3 +21,4 @@ $conn = new PDO("pgsql:host=127.0.0.1;port=5432;dbname=durable_task_test", 'post
 $runner = new MinimalRunner($conn);
 
 $runner->runLoop();
+// $runner->runSingle();

@@ -14,7 +14,7 @@ use ByLexus\DurableTask\Runner;
 use ByLexus\DurableTask\RunnerConfiguration;
 use ByLexus\DurableTask\Task;
 use ByLexus\DurableTask\Tests\Fixture\PayloadHandoffTaskFixture;
-use ByLexus\DurableTask\Tests\Fixture\PayloadOverrideTaskFixture;
+use ByLexus\DurableTask\Tests\Fixture\PayloadMutationTaskFixture;
 use ByLexus\DurableTask\Tests\Fixture\RunnerExceptionTaskFixture;
 use ByLexus\DurableTask\Tests\Fixture\RunnerRetryTaskFixture;
 use ByLexus\DurableTask\Tests\Fixture\RunnerTimeoutTaskFixture;
@@ -152,14 +152,20 @@ final class RunnerIntegrationTest extends TestCase
 
             $rehydratedTask = Task::fromQueueRecord($this->fetchQueueRecord($pdo, $tableName, (int) $record->taskId));
 
-            self::assertEquals((object) ['to' => 'alex@example.com', 'from' => 'chuck@example.com'], $rehydratedTask->getPayload());
-            self::assertEquals((object) ['to' => 'alex@example.com', 'from' => 'chuck@example.com'], $rehydratedTask->actualStep()?->getPayload());
+            self::assertEquals(
+                (object) ['to' => 'alex@example.com', 'from' => 'chuck@example.com'],
+                $rehydratedTask->getPayload(),
+            );
+            self::assertInstanceOf(
+                \ByLexus\DurableTask\Tests\Fixture\PayloadHandoffTargetStepFixture::class,
+                $rehydratedTask->actualStep(),
+            );
         } finally {
             PostgresIntegrationConnection::dropTableIfExists($pdo, $tableName);
         }
     }
 
-    public function testRunSingleUsesNextStepPayloadWhenProvided(): void {
+    public function testRunSinglePersistsMaterializedPayloadObjectsFromNullRootPayload(): void {
         $pdo = PostgresIntegrationConnection::requirePdo($this);
         $tableName = PostgresIntegrationConnection::uniqueTableName();
 
@@ -168,8 +174,7 @@ final class RunnerIntegrationTest extends TestCase
             $schemaManager = new SchemaManager($pdo, $configuration);
             $schemaManager->bootstrap();
 
-            $task = new PayloadOverrideTaskFixture();
-            $task->setPayload(['to' => 'alex@example.com', 'from' => 'chuck@example.com']);
+            $task = new PayloadMutationTaskFixture();
             $record = $task->enqueue($pdo, $configuration);
 
             self::assertNotNull($record->taskId);
@@ -177,20 +182,21 @@ final class RunnerIntegrationTest extends TestCase
             $runner = new Runner(
                 $pdo,
                 $configuration,
-                new RunnerConfiguration('runner-payload-override'),
+                new RunnerConfiguration('runner-payload-materialize'),
             );
 
             self::assertSame(1, $runner->runSingle());
 
             $row = $this->fetchTaskRow($pdo, $tableName, (int) $record->taskId);
 
-            self::assertSame(TaskStatus::QUEUED->value, $row['task_status']);
-            self::assertSame(['payload' => 'overridden-by-next-step'], $row['payload_json']);
+            self::assertSame(TaskStatus::SUCCEEDED->value, $row['task_status']);
+            self::assertSame(['details' => ['bar' => 'somevalue']], $row['payload_json']);
 
             $rehydratedTask = Task::fromQueueRecord($this->fetchQueueRecord($pdo, $tableName, (int) $record->taskId));
 
-            self::assertEquals((object) ['payload' => 'overridden-by-next-step'], $rehydratedTask->getPayload());
-            self::assertEquals((object) ['payload' => 'overridden-by-next-step'], $rehydratedTask->actualStep()?->getPayload());
+            self::assertInstanceOf(\stdClass::class, $rehydratedTask->getPayload());
+            self::assertSame('somevalue', $rehydratedTask->getPayload('details')->bar);
+            self::assertSame('somevalue', $rehydratedTask->getPayload()->details->bar);
         } finally {
             PostgresIntegrationConnection::dropTableIfExists($pdo, $tableName);
         }

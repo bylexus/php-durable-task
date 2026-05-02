@@ -146,7 +146,7 @@ class Runner {
         $taskMetadata = $this->metadataResolver->resolveTaskMetadata($record->taskClass);
         $stepMetadata = $this->metadataResolver->resolveStepMetadata($record->stepClass ?? '', $taskMetadata);
 
-        $result = $this->resolveExecutionResult($record, $step, $stepMetadata->getMaxRuntime());
+        $result = $this->resolveExecutionResult($record, $task, $step, $stepMetadata->getMaxRuntime());
 
         $this->connection->beginTransaction();
 
@@ -173,25 +173,24 @@ class Runner {
         }
     }
 
-    private function executeStep(Step $step): StepResult {
+    private function executeStep(Task $task, Step $step): StepResult {
         try {
-            return $step->execute();
+            return $step->execute($task);
         } catch (\Throwable $throwable) {
             return StepResult::failed(
-                $step->getStoredPayload(),
-                new ErrorInfo(
+                errorInfo: new ErrorInfo(
                     (int) $throwable->getCode(),
                     $throwable->getMessage(),
                     ['exception' => $throwable::class],
                 ),
-                [],
-                $throwable->getMessage(),
+                message: $throwable->getMessage(),
             );
         }
     }
 
     private function resolveExecutionResult(
         QueueRecord $record,
+        Task $task,
         Step $step,
         \DateInterval $maxRuntime,
     ): StepResult {
@@ -199,30 +198,30 @@ class Runner {
             $message = $record->cancelReason ?? 'Cancellation requested.';
 
             return StepResult::cancelled(
-                $step->getStoredPayload(),
-                new ErrorInfo(499, $message),
-                ['requested' => true],
-                $message,
+                errorInfo: new ErrorInfo(499, $message),
+                meta: ['requested' => true],
+                message: $message,
             );
         }
 
         if ($this->hasExceededMaxRuntime($record, $maxRuntime)) {
             return StepResult::failed(
-                $step->getStoredPayload(),
-                new ErrorInfo(408, 'Step exceeded its configured maximum runtime.'),
-                ['timedOut' => true],
-                'Step exceeded its configured maximum runtime.',
+                errorInfo: new ErrorInfo(408, 'Step exceeded its configured maximum runtime.'),
+                meta: ['timedOut' => true],
+                message: 'Step exceeded its configured maximum runtime.',
             );
         }
 
-        $result = $this->executeStep($step);
+        $result = $this->executeStep($task, $step);
 
         if ($this->hasExceededMaxRuntime($record, $maxRuntime)) {
             return StepResult::failed(
-                $result->getPayload(),
-                new ErrorInfo(408, 'Step exceeded its configured maximum runtime.'),
-                ['timedOut' => true],
-                'Step exceeded its configured maximum runtime.',
+                errorInfo: new ErrorInfo(
+                    408,
+                    'Step exceeded its configured maximum runtime.',
+                ),
+                meta: ['timedOut' => true],
+                message: 'Step exceeded its configured maximum runtime.',
             );
         }
 
@@ -279,7 +278,6 @@ class Runner {
             $changes['step_started_at'] = null;
             $changes['step_finished_at'] = null;
             $changes['available_at'] = $now;
-            $changes['payload_json'] = $nextStep->getStoredPayload() ?? $record->payload;
 
             return $changes;
         }

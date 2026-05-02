@@ -13,7 +13,7 @@ use ByLexus\DurableTask\Queue\QueueRecord;
 use ByLexus\DurableTask\Result\StepResult;
 
 abstract class Task {
-    protected mixed $payload = null;
+    private mixed $payload = null;
 
     private ?int $id = null;
     private ?TaskStatus $status = null;
@@ -54,18 +54,6 @@ abstract class Task {
         return $this->cleanupAt;
     }
 
-    public function getPayload(): mixed {
-        return $this->payload ?? new \stdClass();
-    }
-
-    public function getStoredPayload(): mixed {
-        return $this->payload;
-    }
-
-    public function setPayload(mixed $payload): void {
-        $this->payload = $payload;
-    }
-
     public function cancel(string $reason): void {
         $this->cancelRequested = true;
         $this->cancelReason = $reason;
@@ -81,6 +69,52 @@ abstract class Task {
 
     public function actualStep(): ?Step {
         return $this->actualStep;
+    }
+
+    public static function getPayloadClassContext(): string {
+        return static::class;
+    }
+
+    public function getPayload(?string $property = null): mixed {
+        $rootPayload = $this->materializeRootPayload();
+
+        if ($property === null) {
+            return $rootPayload;
+        }
+
+        if (!property_exists($rootPayload, $property) || $rootPayload->{$property} === null) {
+            $rootPayload->{$property} = new \stdClass();
+        }
+
+        return $rootPayload->{$property};
+    }
+
+    public function getStoredPayload(): mixed {
+        return $this->materializeRootPayload();
+    }
+
+    public function hasStoredPayload(): bool {
+        return $this->payload !== null;
+    }
+
+    public function setPayload(mixed $propertyOrPayload, mixed $payload = null): void {
+        $argumentCount = func_num_args();
+
+        if ($argumentCount === 1) {
+            $this->payload = PayloadNormalizer::normalizeRoot($propertyOrPayload);
+
+            return;
+        }
+
+        if ($argumentCount !== 2 || !is_string($propertyOrPayload)) {
+            throw new ConfigurationException(sprintf(
+                'setPayload() expects %s or %s.',
+                'setPayload(mixed $payload)',
+                'setPayload(string $property, mixed $payload)',
+            ));
+        }
+
+        $this->materializeRootPayload()->{$propertyOrPayload} = $payload;
     }
 
     public function enqueue(
@@ -110,10 +144,6 @@ abstract class Task {
     }
 
     public function updateStep(Step $step, StepResult $result): void {
-        if ($result->getPayload() !== null) {
-            $this->payload = $result->getPayload();
-        }
-
         $this->actualStep = $step;
     }
 
@@ -152,9 +182,27 @@ abstract class Task {
         $this->startedAt = $record->taskStartedAt;
         $this->finishedAt = $record->taskFinishedAt;
         $this->cleanupAt = $record->cleanupAt;
-        $this->payload = $record->payload;
+        $this->setStoredPayload($record->payload);
         $this->cancelRequested = $record->cancelRequested;
         $this->cancelReason = $record->cancelReason;
         $this->actualStep = $actualStep;
+    }
+
+    protected function setStoredPayload(mixed $payload): void {
+        $this->payload = PayloadNormalizer::normalizeRoot($payload);
+    }
+
+    private function materializeRootPayload(): \stdClass {
+        if ($this->payload === null) {
+            $this->payload = new \stdClass();
+
+            return $this->payload;
+        }
+
+        if (!$this->payload instanceof \stdClass) {
+            $this->payload = PayloadNormalizer::normalizeRoot($this->payload);
+        }
+
+        return $this->payload;
     }
 }

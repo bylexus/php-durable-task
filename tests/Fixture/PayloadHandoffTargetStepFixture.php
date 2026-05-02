@@ -6,10 +6,11 @@ namespace ByLexus\DurableTask\Tests\Fixture;
 
 use ByLexus\DurableTask\Result\StepResult;
 use ByLexus\DurableTask\Step;
+use ByLexus\DurableTask\Task;
 
 final class PayloadHandoffTargetStepFixture extends Step
 {
-    public function execute(): StepResult {
-        return StepResult::succeeded($this->getStoredPayload());
+    public function execute(Task $task): StepResult {
+        return StepResult::succeeded();
     }
 }

@@ -16,6 +16,10 @@ use PHPUnit\Framework\TestCase;
 
 final class TaskTest extends TestCase
 {
+    public function testTaskProvidesPayloadClassContext(): void {
+        self::assertSame(QueueWorkflowTaskFixture::class, QueueWorkflowTaskFixture::getPayloadClassContext());
+    }
+
     public function testTaskCanBeReconstitutedFromQueueRecord(): void {
         $record = new QueueRecord(
             42,
@@ -48,7 +52,8 @@ final class TaskTest extends TestCase
 
         self::assertInstanceOf(QueueWorkflowTaskFixture::class, $task);
         self::assertSame(42, $task->getId());
-        self::assertSame(['foo' => 'bar'], $task->getPayload());
+        self::assertInstanceOf(\stdClass::class, $task->getPayload());
+        self::assertSame('bar', $task->getPayload()->foo);
         self::assertInstanceOf(QueueWorkflowStepFixture::class, $task->actualStep());
         self::assertSame(2, $task->actualStep()?->getStepAttempt());
     }
@@ -61,7 +66,7 @@ final class TaskTest extends TestCase
         $task->enqueue($this->createStub(\PDO::class));
     }
 
-    public function testNullPayloadIsExposedAsObjectOnTaskAndStep(): void {
+    public function testNullPayloadIsExposedAsObjectOnTaskWhenStepIsHydrated(): void {
         $record = new QueueRecord(
             42,
             QueueWorkflowTaskFixture::class,
@@ -91,9 +96,61 @@ final class TaskTest extends TestCase
 
         $task = Task::fromQueueRecord($record);
 
-        self::assertNull($task->getStoredPayload());
+        self::assertInstanceOf(\stdClass::class, $task->getStoredPayload());
         self::assertInstanceOf(\stdClass::class, $task->getPayload());
-        self::assertInstanceOf(\stdClass::class, $task->actualStep()?->getPayload());
-        self::assertNull($task->actualStep()?->getStoredPayload());
+        self::assertInstanceOf(QueueWorkflowStepFixture::class, $task->actualStep());
+        self::assertInstanceOf(\stdClass::class, $task->getStoredPayload());
+    }
+
+    public function testStoredPayloadMaterializesRootObjectWithoutPriorAccess(): void {
+        $task = new QueueWorkflowTaskFixture();
+
+        self::assertFalse($task->hasStoredPayload());
+        self::assertInstanceOf(\stdClass::class, $task->getStoredPayload());
+        self::assertTrue($task->hasStoredPayload());
+        self::assertSame($task->getPayload(), $task->getStoredPayload());
+    }
+
+    public function testPayloadAccessCachesRootAndMaterializedTopLevelObject(): void {
+        $task = new QueueWorkflowTaskFixture();
+
+        $rootPayload = $task->getPayload();
+        $namedPayload = $task->getPayload('details');
+        $namedPayload->bar = 'somevalue';
+
+        self::assertSame($rootPayload, $task->getPayload());
+        self::assertSame($namedPayload, $task->getPayload('details'));
+        self::assertSame($namedPayload, $task->getPayload()->details);
+        self::assertSame('somevalue', $task->getPayload()->details->bar);
+        self::assertSame($rootPayload, $task->getStoredPayload());
+    }
+
+    public function testTopLevelPayloadValuesRemainUntouchedWhenAlreadySet(): void {
+        $task = new QueueWorkflowTaskFixture();
+
+        $task->setPayload(['details' => ['bar' => 'baz'], 'count' => 3]);
+
+        self::assertSame(['bar' => 'baz'], $task->getPayload('details'));
+        self::assertSame(3, $task->getPayload('count'));
+        self::assertSame(['bar' => 'baz'], $task->getPayload()->details);
+    }
+
+    public function testNamedSetterStoresTopLevelValues(): void {
+        $task = new QueueWorkflowTaskFixture();
+
+        $task->setPayload('details', ['bar' => 'baz']);
+        $task->setPayload('count', 3);
+
+        self::assertSame(['bar' => 'baz'], $task->getPayload('details'));
+        self::assertSame(3, $task->getPayload('count'));
+    }
+
+    public function testRootScalarPayloadIsRejected(): void {
+        $task = new QueueWorkflowTaskFixture();
+
+        $this->expectException(ConfigurationException::class);
+        $this->expectExceptionMessage('Root payload must be null, an array, or an object.');
+
+        $task->setPayload('invalid-root-payload');
     }
 }

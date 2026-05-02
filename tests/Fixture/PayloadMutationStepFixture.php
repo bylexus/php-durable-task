@@ -8,9 +8,12 @@ use ByLexus\DurableTask\Result\StepResult;
 use ByLexus\DurableTask\Step;
 use ByLexus\DurableTask\Task;
 
-final class PayloadHandoffSourceStepFixture extends Step
+final class PayloadMutationStepFixture extends Step
 {
     public function execute(Task $task): StepResult {
-        return StepResult::succeeded(['handoff' => 'keep-existing']);
+        $details = $task->getPayload('details');
+        $details->bar = 'somevalue';
+
+        return StepResult::succeeded(meta: ['mutated' => true]);
     }
 }

@@ -37,7 +37,7 @@ The first version should not attempt to solve these concerns:
 - Baseline statuses are `queued`, `running`, `succeeded`, `failed`, and `cancelled`.
 - `StepResult` is the standard result contract for step execution. A Step may also end in an Exception, which is catched by the Runner.
 - Runner timing uses documented sensible defaults rather than requiring configuration for all values.
-- Payload updates: prefer full payload replacement in V1, because patch semantics add complexity and edge cases. Yes, true for V1.
+- Payload persistence remains full replacement at queue row boundaries, but the in-memory payload API must always expose a lazily materialized `stdClass` root object and support direct access to lazily materialized top-level payload objects.
 - Metadata persistence: Persisting class names are sufficient, no other metadata needed.
 - No task or step history tables are needed in V1.
 - Succeeded and failed task rows are retained only temporarily and then deleted according to task-level cleanup metadata.
@@ -115,7 +115,7 @@ Responsibilities:
 Proposed responsibilities for the base API:
 
 - Expose read-only queue-derived properties such as id, status, timestamps, and retry counters.
-- Expose `getPayload()` and `setPayload()` for durable workflow state.
+- Expose root and top-level payload accessors for durable workflow state.
 - Expose `cancel()` to request cancellation.
 - Expose `actualStep()` or equivalent to inspect the currently persisted step.
 - Expose `enqueue(PDO $connection)` as the entry point for new task instances.
@@ -136,16 +136,96 @@ Responsibilities:
 Important rules:
 
 - `Step` must not mutate queue state directly.
-- `Step` may read the current payload, but all durable updates must return through `StepResult`.
-- `Step` should be reconstructable from persisted task payload and queue metadata.
+- `Step` must not own or cache payload state.
+- `Step` must receive the owning `Task` instance during execution and use the task as the single source of truth for payload access and mutation.
+- `Step` should be reconstructable from persisted queue metadata; payload reconstruction remains task-owned.
 - Concrete step classes must be instantiatable through a default constructor so the library can rebuild them directly.
+
+### Task-Owned Payload Refactor
+
+The current implementation still duplicates payload behavior across `Task` and `Step` by sharing `HasPayloadAccess` and then reconciling both objects after `execute()`. That is the wrong ownership model.
+
+Required target model:
+
+- Only `Task` owns the payload object and payload access API.
+- `Step` receives the owning task during execution, for example through `execute(Task $task): StepResult`.
+- Step code reads and mutates payload only through the passed task instance.
+- After each step finishes, the task's payload is the authoritative state written back to `payload_json`.
+- `StepResult` should no longer carry payload data at all.
+
+Concrete code areas that must change:
+
+- `src/Task.php`
+  The task remains the only payload owner. Keep the payload API directly on `Task`, remove the separate `HasPayloadAccess` trait, remove step-payload reconciliation logic that assumes the step also owns payload state, and make `updateStep()` persist the already-mutated task payload.
+- `src/Step.php`
+  Remove `HasPayloadAccess` from `Step`, drop step-level payload storage and payload helper methods, and change the abstract execution contract from `execute(): StepResult` to `execute(Task $task): StepResult`.
+- `src/PayloadNormalizer.php`
+  Keep normalization separate, but scope it to the task-owned payload path only. After the refactor, no step code should depend on payload helpers directly.
+- `src/Runner.php`
+  Change the execution call from `$step->execute()` to `$step->execute($task)`. Remove timeout/cancellation/failure branches that read payload from the step object. All persistence branches should use the task payload as the authoritative durable state after execution.
+- `src/Result/StepResult.php`
+  Remove payload state from `StepResult` entirely so it carries only outcome and diagnostics.
+- `src/Queue/PostgresQueue.php` and `src/Queue/QueueRecord.php`
+  Storage remains task-level and can continue to use `payload_json`, but step hydration should no longer imply that the step owns a payload copy.
+- `tests/TaskTest.php`, `tests/ResultTest.php`, `tests/Integration/PostgresQueueIntegrationTest.php`, and `tests/Integration/RunnerIntegrationTest.php`
+  Rewrite assertions that currently inspect payload through `actualStep()` and replace them with task-owned payload assertions plus execute-signature coverage.
+- Step fixtures under `tests/Fixture/` and example steps under `examples/`
+  Update every concrete step implementation to the new `execute(Task $task)` signature and replace `$this->getPayload()` usage with `$task->getPayload()`.
+- Example and helper tasks under `examples/` and `tests/Fixture/`
+  Remove any code that sets payload directly on steps for handoff. Next-step transitions should rely on task payload only.
+
+Proposed implementation sequence:
+
+1. Refactor `Step` to accept the executing task and remove payload helpers from the step base class.
+2. Update `Runner` so execution, timeout handling, cancellation handling, retries, and next-step transitions all treat the task payload as authoritative.
+3. Simplify `Task::updateStep()` so it persists the task payload after execution without any `StepResult` payload reconciliation.
+4. Update every concrete step in tests and examples to use the passed task instance for payload access.
+5. Rewrite unit and integration tests that currently expect step payload state to exist independently from the task.
+
+Expected behavioral result:
+
+- There is only one in-memory durable payload object per claimed task.
+- Steps mutate that object through the task reference they receive.
+- Queue persistence always writes the task's current payload object back after step execution.
+
+### Payload Object Contract
+
+The payload API remains object-based, but after the refactor it is task-owned rather than shared between task and step objects.
+
+Required behavior:
+
+- `getPayload()` must always return the root payload as `stdClass`.
+- `getPayload('foo')` must return `getPayload()->foo` directly.
+- If the root payload or the requested top-level property is currently `null` or missing, first access must materialize a new `stdClass` and store it back into the in-memory payload graph.
+- Repeated calls to `getPayload()` and `getPayload('foo')` must return the same object instances for the same task instance.
+- A mutation such as `getPayload('foo')->bar = 'somevalue'` must be visible later through both `getPayload('foo')->bar` and `getPayload()->foo->bar`.
+- Root payload replacement should continue to be supported, but all setter entry points must normalize the stored in-memory shape back to the object contract.
+- A named top-level setter variant must be supported in addition to root replacement so callers can replace one top-level payload object without rebuilding the whole payload manually.
+- Existing non-null top-level property values may be scalars, arrays, or objects and must be returned unchanged rather than being replaced with `stdClass`.
+- Root replacement accepts `null`, arrays, and objects. `null` must normalize immediately to an empty `stdClass`. Scalar root payloads must be rejected.
+
+Normalization rules:
+
+- Rows with `payload_json = null` must normalize to an empty root object during hydration; the root payload must never remain `null` in memory.
+- Legacy array payloads passed into root setters or returned from older tests/examples should be normalized into the root object form so the new accessor contract remains stable.
+- Root normalization applies only to the payload root. Top-level property values remain whatever was explicitly stored there, including arrays and scalars.
+- First access is intentionally stateful: once the root object or a top-level object is materialized, later persistence may write `{}` or an object subtree even if the row originally stored `null`.
+
+Affected implementation areas for this refinement:
+
+- `src/Task.php`: introduce cached root/top-level payload materialization, named accessors, normalization, and update-step integration.
+- `src/Step.php`: remove step-owned payload access and switch execution to task-mediated payload access.
+- `src/Result/StepResult.php`: remove payload handling entirely and keep only status plus diagnostics.
+- `src/Runner.php`: preserve one task-owned payload object across execution, exception handling, retry requeueing, and next-step transitions.
+- `src/Queue/QueueRecord.php` and `src/Queue/PostgresQueue.php`: keep storage compatible with nullable JSON, but ensure hydration and persistence work with the new in-memory object contract and legacy payload shapes.
+- `tests/TaskTest.php`, `tests/ResultTest.php`, `tests/Integration/PostgresQueueIntegrationTest.php`, and `tests/Integration/RunnerIntegrationTest.php`: expand coverage from shape equality to task-owned payload identity, lazy materialization, and persistence of nested mutations.
+- Payload-related fixtures and examples such as `tests/Fixture/RunnerRetryStepFixture.php`, `tests/Fixture/PayloadOverrideTaskFixture.php`, and the Chuck Norris example files: replace step-local payload access with task-mediated payload access.
 
 ### StepResult
 
 `StepResult` is the contract between a step and the runner. It should carry:
 
 - Step outcome status.
-- Updated task payload.
 - Optional progress or informational metadata.
 - Optional structured error data.
 - Optional message for logs or diagnostics.
@@ -153,13 +233,12 @@ Important rules:
 Recommended V1 shape:
 
 - `status`: `succeeded`, `failed`, `cancelled`, or `running` only if progress updates are explicitly supported.
-- `payload`: full replacement payload.
 - `errorInfo`: nullable object with machine-readable and human-readable fields.
 - `meta`: optional associative array for diagnostics.
 
 Recommendation:
 
-- Keep V1 to full payload replacement. Merge behavior can be introduced later if needed.
+- Keep queue persistence task-owned. Fine-grained mutation is supported through the single task payload object, not through `StepResult` payload transport or partial SQL patch semantics.
 
 ### Attributes
 
@@ -237,7 +316,7 @@ Step state:
 
 Durable data:
 
-- `payload_json` jsonb not null.
+- `payload_json` jsonb nullable.
 - `result_json` jsonb nullable.
 - `error_json` jsonb nullable.
 
@@ -587,6 +666,9 @@ Add focused tests for:
 - Cleanup retention resolution.
 - Metadata precedence.
 - StepResult normalization.
+- Payload root and top-level object identity caching.
+- Payload normalization from `null` and legacy arrays.
+- Named payload accessor and setter semantics.
 - Retry policy decisions.
 - Status transition validation.
 - Error serialization.
@@ -597,6 +679,8 @@ Add PostgreSQL-backed tests for:
 
 - Schema bootstrap on empty database.
 - Enqueue and claim flow.
+- Null payload hydration into the object view.
+- Persistence of materialized top-level payload objects across enqueue, claim, retry, and next-step transitions.
 - Concurrent claiming with multiple runner processes.
 - Retry and requeue behavior.
 - Notification wakeups.
@@ -686,12 +770,13 @@ Exit criteria:
 
 1. Implement base `Task` and `Step` classes.
 2. Implement direct task and step instantiation from persisted class names.
-3. Define how queue records hydrate domain instances.
+3. Add the shared payload object helper and define how queue records hydrate domain instances.
 4. Add unit tests with example task and step classes.
 
 Exit criteria:
 
 - A queued record can be reconstructed into executable objects.
+- Repeated payload access on a task or step returns stable object references for the root payload and requested top-level payload objects.
 
 ### Phase 7: Runner
 
@@ -724,6 +809,9 @@ Exit criteria:
 V1 is ready when all of the following are true:
 
 - A task can be enqueued with a payload.
+- `getPayload()` always exposes a stable root `stdClass`, even when the stored payload is `null`.
+- `getPayload('foo')` materializes a stable top-level `stdClass` only when that property is missing or `null`; existing scalar, array, and object values are returned unchanged.
+- Nested mutations on materialized payload objects survive later reads and persistence.
 - The queue schema can be created on an empty PostgreSQL database through explicit bootstrap, and the runner may perform a one-time startup bootstrap.
 - One or more runner processes can safely claim and execute tasks.
 - Task state remains durable across runner restarts.

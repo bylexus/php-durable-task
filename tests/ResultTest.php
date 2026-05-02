@@ -20,11 +20,10 @@ final class ResultTest extends TestCase
         self::assertSame(['traceId' => 'abc-123'], $errorInfo->getDetails());
     }
 
-    public function testSucceededResultStoresPayloadMetaAndMessage(): void {
-        $result = StepResult::succeeded(['foo' => 'bar'], ['progress' => 'done'], 'All good');
+    public function testSucceededResultStoresMetaAndMessage(): void {
+        $result = StepResult::succeeded(['progress' => 'done'], 'All good');
 
         self::assertSame(StepStatus::SUCCEEDED, $result->getStatus());
-        self::assertSame(['foo' => 'bar'], $result->getPayload());
         self::assertNull($result->getErrorInfo());
         self::assertSame(['progress' => 'done'], $result->getMeta());
         self::assertSame('All good', $result->getMessage());
@@ -32,7 +31,7 @@ final class ResultTest extends TestCase
 
     public function testFailedResultStoresErrorInfo(): void {
         $errorInfo = new ErrorInfo(500, 'Failure', 'raw exception data');
-        $result = StepResult::failed(['foo' => 'bar'], $errorInfo, ['retry' => 1], 'Step failed');
+        $result = StepResult::failed($errorInfo, ['retry' => 1], 'Step failed');
 
         self::assertSame(StepStatus::FAILED, $result->getStatus());
         self::assertSame($errorInfo, $result->getErrorInfo());
@@ -42,7 +41,7 @@ final class ResultTest extends TestCase
 
     public function testCancelledResultStoresErrorInfo(): void {
         $errorInfo = new ErrorInfo(499, 'Cancelled');
-        $result = StepResult::cancelled(['foo' => 'bar'], $errorInfo, ['source' => 'signal'], 'Cancelled by runner');
+        $result = StepResult::cancelled($errorInfo, ['source' => 'signal'], 'Cancelled by runner');
 
         self::assertSame(StepStatus::CANCELLED, $result->getStatus());
         self::assertSame($errorInfo, $result->getErrorInfo());
@@ -53,12 +52,12 @@ final class ResultTest extends TestCase
     public function testQueuedStatusIsRejectedForStepResult(): void {
         $this->expectException(ConfigurationException::class);
 
-        new StepResult(StepStatus::QUEUED, null);
+        new StepResult(StepStatus::QUEUED);
     }
 
     public function testRunningStatusIsRejectedForStepResultInV1(): void {
         $this->expectException(ConfigurationException::class);
 
-        new StepResult(StepStatus::RUNNING, null);
+        new StepResult(StepStatus::RUNNING);
     }
 }

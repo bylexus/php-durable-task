@@ -9,15 +9,16 @@ use ByLexus\DurableTask\Exception\ConfigurationException;
 use ByLexus\DurableTask\Queue\QueueRecord;
 use ByLexus\DurableTask\Result\StepResult;
 
-abstract class Step
-{
-    protected mixed $payload = null;
-
+abstract class Step {
     private ?int $taskId = null;
     private ?StepStatus $status = null;
     private int $stepAttempt = 0;
     private ?\DateTimeImmutable $startedAt = null;
     private ?\DateTimeImmutable $finishedAt = null;
+
+    public static function getPayloadClassContext(): string {
+        return static::class;
+    }
 
     public function getTaskId(): ?int {
         return $this->taskId;
@@ -37,18 +38,6 @@ abstract class Step
 
     public function getFinishedAt(): ?\DateTimeImmutable {
         return $this->finishedAt;
-    }
-
-    public function getPayload(): mixed {
-        return $this->payload ?? new \stdClass();
-    }
-
-    public function getStoredPayload(): mixed {
-        return $this->payload;
-    }
-
-    public function setPayload(mixed $payload): void {
-        $this->payload = $payload;
     }
 
     public static function fromQueueRecord(QueueRecord $record): ?self {
@@ -79,7 +68,7 @@ abstract class Step
         return $step;
     }
 
-    abstract public function execute(): StepResult;
+    abstract public function execute(Task $task): StepResult;
 
     public function hydrateFromQueueRecord(QueueRecord $record): void {
         $this->taskId = $record->taskId;
@@ -87,6 +76,5 @@ abstract class Step
         $this->stepAttempt = $record->stepAttempt;
         $this->startedAt = $record->stepStartedAt;
         $this->finishedAt = $record->stepFinishedAt;
-        $this->payload = $record->payload;
     }
 }
