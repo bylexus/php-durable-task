@@ -55,9 +55,20 @@ class Runner {
         $this->bootstrapSchemaIfConfigured();
         $this->queue->deleteExpired();
 
-        $record = $this->queue->claim($this->runnerConfiguration->getRunnerId());
+        $processed = 0;
 
-        if ($record === null) {
+        while (true) {
+            $record = $this->queue->claim($this->runnerConfiguration->getRunnerId());
+
+            if ($record === null) {
+                break;
+            }
+
+            $this->processClaimedRecord($record);
+            $processed++;
+        }
+
+        if ($processed === 0) {
             $this->logger->debug('Runner found no queued task to process.', [
                 'runnerId' => $this->runnerConfiguration->getRunnerId(),
             ]);
@@ -65,9 +76,7 @@ class Runner {
             return 0;
         }
 
-        $this->processClaimedRecord($record);
-
-        return 1;
+        return $processed;
     }
 
     public function runLoop(): void {
