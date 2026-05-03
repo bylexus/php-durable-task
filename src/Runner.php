@@ -51,7 +51,7 @@ class Runner {
         $this->metadataResolver = $metadataResolver ?? new MetadataResolver();
         $this->logger = $this->runnerConfiguration->getLogger() ?? new NullLogger();
         $this->queue = new PostgresQueue($this->connection, $this->queueConfiguration, $this->logger);
-        $this->signalHandler = new SignalHandler();
+        $this->signalHandler = new SignalHandler($this->handleStopRequested(...));
 
         $this->logger->debug('Runner initialized.', [
             'runnerId' => $this->runnerConfiguration->getRunnerId(),
@@ -97,23 +97,56 @@ class Runner {
         $this->signalHandler->register();
         $this->ensureNotificationListener();
 
-        while (!$this->signalHandler->isStopRequested()) {
+        while (true) {
             $this->queue->deleteExpired();
 
             $record = $this->queue->claim($this->runnerConfiguration->getRunnerId());
 
             if ($record === null) {
+                if ($this->signalHandler->isStopRequested()) {
+                    break;
+                }
+
                 $this->waitForNotification();
+
+                if ($this->signalHandler->isStopRequested()) {
+                    break;
+                }
 
                 continue;
             }
 
             $this->processClaimedRecord($record);
+
+            if ($this->signalHandler->isStopRequested()) {
+                break;
+            }
         }
 
         $this->logger->info('Runner loop stopped.', [
             'runnerId' => $this->runnerConfiguration->getRunnerId(),
         ]);
+    }
+
+    private function handleStopRequested(int $signal): void {
+        $signalName = match ($signal) {
+            SIGTERM => 'SIGTERM',
+            defined('SIGINT') && $signal === SIGINT => 'SIGINT',
+            default => sprintf('signal %d', $signal),
+        };
+        $message = sprintf(
+            'Cancellation requested via %s. The runner will stop after the current step completes.',
+            $signalName,
+        );
+
+        $this->logger->notice($message, [
+            'runnerId' => $this->runnerConfiguration->getRunnerId(),
+            'signal' => $signal,
+        ]);
+
+        if (defined('STDERR')) {
+            fwrite(STDERR, $message . PHP_EOL);
+        }
     }
 
     private function bootstrapSchemaIfConfigured(): void {

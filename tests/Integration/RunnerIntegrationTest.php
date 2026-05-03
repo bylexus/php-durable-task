@@ -14,6 +14,7 @@ use ByLexus\DurableTask\Queue\SchemaManager;
 use ByLexus\DurableTask\Runner;
 use ByLexus\DurableTask\RunnerConfiguration;
 use ByLexus\DurableTask\Task;
+use ByLexus\DurableTask\Tests\Fixture\GracefulShutdownTaskFixture;
 use ByLexus\DurableTask\Tests\Fixture\ConstructorInjectedServiceFixture;
 use ByLexus\DurableTask\Tests\Fixture\ConstructorInjectedTaskFixture;
 use ByLexus\DurableTask\Tests\Fixture\AttachmentRoundtripTaskFixture;
@@ -674,6 +675,67 @@ final class RunnerIntegrationTest extends TestCase
 
                 proc_terminate($process, SIGTERM);
                 $this->waitForFile($markerPath, 30);
+            } finally {
+                $this->terminateProcess($process);
+
+                foreach ($pipes as $pipe) {
+                    fclose($pipe);
+                }
+
+                proc_close($process);
+            }
+        } finally {
+            @unlink($markerPath);
+            PostgresIntegrationConnection::dropTableIfExists($pdo, $tableName);
+        }
+    }
+
+    public function testRunLoopWaitsForRunningStepBeforeStoppingOnSigterm(): void {
+        $pdo = PostgresIntegrationConnection::requirePdo($this);
+        $tableName = PostgresIntegrationConnection::uniqueTableName();
+        $markerPath = sprintf('%s/%s.stop', sys_get_temp_dir(), $tableName);
+        @unlink($markerPath);
+
+        try {
+            $configuration = new QueueConfiguration($tableName);
+            $schemaManager = new SchemaManager($pdo, $configuration);
+            $schemaManager->bootstrap();
+
+            $task = new GracefulShutdownTaskFixture();
+            $record = $task->enqueue($pdo, $configuration);
+
+            self::assertNotNull($record->taskId);
+
+            $process = proc_open(
+                [PHP_BINARY, 'tests/Support/run-loop.php', $tableName, $markerPath],
+                [
+                    0 => ['pipe', 'r'],
+                    1 => ['pipe', 'w'],
+                    2 => ['pipe', 'w'],
+                ],
+                $pipes,
+                dirname(__DIR__, 2),
+            );
+
+            self::assertIsResource($process);
+
+            try {
+                $this->waitForTaskStatus($pdo, $tableName, (int) $record->taskId, TaskStatus::RUNNING->value, 20);
+
+                proc_terminate($process, SIGTERM);
+
+                $this->waitForTaskStatus($pdo, $tableName, (int) $record->taskId, TaskStatus::SUCCEEDED->value, 30);
+                $this->waitForFile($markerPath, 30);
+
+                $row = $this->fetchTaskRow($pdo, $tableName, (int) $record->taskId);
+
+                self::assertSame(TaskStatus::SUCCEEDED->value, $row['task_status']);
+                self::assertSame(StepStatus::SUCCEEDED->value, $row['step_status']);
+                self::assertSame(true, $row['result_json']['meta']['completedAfterSignal']);
+                self::assertStringContainsString(
+                    'Cancellation requested via SIGTERM. The runner will stop after the current step completes.',
+                    (string) stream_get_contents($pipes[2]),
+                );
             } finally {
                 $this->terminateProcess($process);
 
