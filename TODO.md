@@ -141,6 +141,29 @@
 - [x] Add runner tests that verify configured logger usage and `NullLogger` fallback resolution.
 - [x] Add queue and integration tests that verify the required lifecycle and error events are emitted.
 
+## FileAttachment Payload Support
+
+- [x] Add a `FileAttachment` value object that keeps file metadata plus either transient in-memory content before persistence or a stored blob reference after hydration.
+- [x] Add `FileAttachment::fromFile(string $path): self` to load a readable file into an attachment object.
+- [x] Add `FileAttachment::toFile(string $path): void` to write stored attachment content back to disk.
+- [x] Keep the public payload API unchanged so developers can assign attachments directly through `Task::getPayload()->foo->bar = FileAttachment::fromFile(...)`.
+- [x] Define one reserved payload envelope marker for persisted `FileAttachment` values and store only metadata plus a `blobId` reference in `payload_json`.
+- [x] Introduce a second PostgreSQL table for attachment binary data with a `bytea` content column.
+- [x] Extend `SchemaManager` bootstrap and schema dump output so the blob table, indexes, and foreign key are created automatically together with the main queue table.
+- [x] Add a foreign key from the blob table to the main task row with `ON DELETE CASCADE` so attachment data is removed automatically when a task row is deleted.
+- [x] Finalize the planned blob-table columns: `blob_id`, `task_id`, `content`, `size_bytes`, `sha256`, and `created_at`.
+- [x] Add the blob lookup index on `task_id`; leave `(task_id, sha256)` deduplication out of the first implementation.
+- [x] Add a small attachment blob storage service to insert binary data, fetch binary data, and support file write-back without exposing raw SQL to `FileAttachment`.
+- [x] Add recursive payload serialization so nested `FileAttachment` objects are stored automatically as metadata envelopes plus blob references before `payload_json` is written.
+- [x] Add recursive payload hydration so persisted attachment envelopes are converted back into `FileAttachment` objects after queue record restore.
+- [x] Ensure hydrated attachments can resolve their blob content again for `toFile()` and related read operations.
+- [x] Reject unreadable files, missing blob rows, and invalid attachment envelopes with clear serialization or configuration errors.
+- [x] Add unit tests for `FileAttachment` creation, metadata retention, and `toFile()` roundtrip behavior.
+- [x] Add schema tests for blob-table bootstrap, DDL dump output, and foreign-key cascade behavior.
+- [x] Add payload roundtrip tests for nested payload objects and arrays containing `FileAttachment` instances.
+- [x] Add queue or runner persistence tests to verify automatic blob storage on database write and automatic attachment hydration on restore.
+- [x] Update `README.md` with a short usage example showing direct payload assignment and restoring an attachment back to a file.
+
 
 ## Arbitary notes
 

@@ -14,9 +14,12 @@ final class SchemaManagerTest extends TestCase
         $ddl = SchemaManager::exportDdl(new QueueConfiguration('custom_queue'));
 
         self::assertStringContainsString('CREATE TABLE IF NOT EXISTS "custom_queue"', $ddl);
+        self::assertStringContainsString('CREATE TABLE IF NOT EXISTS "custom_queue_blob_data"', $ddl);
         self::assertStringContainsString('cleanup_at TIMESTAMPTZ NULL', $ddl);
         self::assertStringContainsString('payload_json JSONB NULL', $ddl);
+        self::assertStringContainsString('content BYTEA NOT NULL', $ddl);
         self::assertStringContainsString('CREATE INDEX IF NOT EXISTS "custom_queue_cleanup_at_idx"', $ddl);
+        self::assertStringContainsString('CREATE INDEX IF NOT EXISTS "custom_queue_blob_task_id_idx"', $ddl);
     }
 
     public function testConstructingSchemaManagerDoesNotExecuteBootstrap(): void {

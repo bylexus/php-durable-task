@@ -23,7 +23,9 @@ final class SchemaManagerIntegrationTest extends TestCase
             $schemaManager->bootstrap();
 
             self::assertTrue($schemaManager->tableExists());
+            self::assertTrue($schemaManager->blobTableExists());
             self::assertTrue($this->columnExists($pdo, $tableName, 'cleanup_at'));
+            self::assertTrue($this->columnExists($pdo, $configuration->getBlobTableName(), 'content'));
             self::assertTrue($this->columnAllowsNulls($pdo, $tableName, 'payload_json'));
             self::assertTrue($this->taskIdIsIdentityColumn($pdo, $tableName));
         } finally {
@@ -45,11 +47,14 @@ final class SchemaManagerIntegrationTest extends TestCase
             $schemaManager = new SchemaManager($pdo, new QueueConfiguration($tableName));
 
             self::assertTrue($schemaManager->tableExists());
+            self::assertTrue($schemaManager->blobTableExists());
             $schemaManager->validate();
             self::assertTrue($this->columnExists($pdo, $tableName, 'cleanup_at'));
+            self::assertTrue($this->columnExists($pdo, sprintf('%s_blob_data', $tableName), 'content'));
             self::assertTrue($this->columnAllowsNulls($pdo, $tableName, 'payload_json'));
             self::assertTrue($this->taskIdIsIdentityColumn($pdo, $tableName));
             self::assertTrue($this->indexExists($pdo, sprintf('%s_cleanup_at_idx', $tableName)));
+            self::assertTrue($this->indexExists($pdo, sprintf('%s_blob_task_id_idx', $tableName)));
         } finally {
             PostgresIntegrationConnection::dropTableIfExists($pdo, $tableName);
         }
@@ -67,6 +72,7 @@ final class SchemaManagerIntegrationTest extends TestCase
 
             self::assertTrue($this->indexExists($pdo, sprintf('%s_cleanup_at_idx', $tableName)));
             self::assertTrue($this->indexExists($pdo, sprintf('%s_task_status_available_at_idx', $tableName)));
+            self::assertTrue($this->indexExists($pdo, sprintf('%s_blob_task_id_idx', $tableName)));
         } finally {
             PostgresIntegrationConnection::dropTableIfExists($pdo, $tableName);
         }

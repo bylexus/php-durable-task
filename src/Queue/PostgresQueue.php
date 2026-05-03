@@ -7,6 +7,7 @@ namespace ByLexus\DurableTask\Queue;
 use ByLexus\DurableTask\Enum\StepStatus;
 use ByLexus\DurableTask\Enum\TaskStatus;
 use ByLexus\DurableTask\Exception\ConfigurationException;
+use ByLexus\DurableTask\PayloadNormalizer;
 use ByLexus\DurableTask\Exception\QueueException;
 use ByLexus\DurableTask\Exception\SerializationException;
 use ByLexus\DurableTask\Step;
@@ -52,6 +53,7 @@ final class PostgresQueue {
     private \PDO $connection;
     private QueueConfiguration $configuration;
     private LoggerInterface $logger;
+    private AttachmentBlobStore $attachmentBlobStore;
 
     public function __construct(
         \PDO $connection,
@@ -61,10 +63,17 @@ final class PostgresQueue {
         $this->connection = $connection;
         $this->configuration = $configuration ?? new QueueConfiguration();
         $this->logger = $logger ?? new NullLogger();
+        $this->attachmentBlobStore = new AttachmentBlobStore($this->connection, $this->configuration);
+    }
+
+    public function getAttachmentBlobStore(): AttachmentBlobStore {
+        return $this->attachmentBlobStore;
     }
 
     public function enqueue(Task $task, Step $firstStep): QueueRecord {
         $now = $this->currentTimestamp();
+        $startedTransaction = false;
+
         $this->logger->info('Queue enqueue started.', [
             'taskClass' => $task::class,
             'stepClass' => $firstStep::class,
@@ -72,9 +81,15 @@ final class PostgresQueue {
             'stepStatus' => StepStatus::QUEUED->value,
         ]);
 
-        $statement = $this->connection->prepare(
-            sprintf(
-                <<<'SQL'
+        if (!$this->connection->inTransaction()) {
+            $this->connection->beginTransaction();
+            $startedTransaction = true;
+        }
+
+        try {
+            $statement = $this->connection->prepare(
+                sprintf(
+                    <<<'SQL'
 INSERT INTO %s (
     task_class,
     step_class,
@@ -113,7 +128,7 @@ VALUES (
     :step_attempt,
     :step_started_at,
     :step_finished_at,
-    :payload_json,
+    NULL,
     :result_json,
     :error_json,
     :available_at,
@@ -127,36 +142,54 @@ VALUES (
 )
 RETURNING *
 SQL,
-                $this->quotedTableName(),
-            ),
-        );
-        $statement->execute([
-            'task_class' => $task::class,
-            'step_class' => $firstStep::class,
-            'task_status' => TaskStatus::QUEUED->value,
-            'task_attempt' => 0,
-            'task_created_at' => $this->formatDateTime($now),
-            'task_started_at' => null,
-            'task_finished_at' => null,
-            'cleanup_at' => null,
-            'step_status' => StepStatus::QUEUED->value,
-            'step_attempt' => 0,
-            'step_started_at' => null,
-            'step_finished_at' => null,
-            'payload_json' => $this->normalizeColumnValue('payload_json', $task->getStoredPayload()),
-            'result_json' => null,
-            'error_json' => null,
-            'available_at' => $this->formatDateTime($now),
-            'claimed_at' => null,
-            'claimed_by' => null,
-            'last_error_code' => null,
-            'last_error_message' => null,
-            'cancel_reason' => null,
-            'updated_at' => $this->formatDateTime($now),
-        ]);
+                    $this->quotedTableName(),
+                ),
+            );
+            $statement->execute([
+                'task_class' => $task::class,
+                'step_class' => $firstStep::class,
+                'task_status' => TaskStatus::QUEUED->value,
+                'task_attempt' => 0,
+                'task_created_at' => $this->formatDateTime($now),
+                'task_started_at' => null,
+                'task_finished_at' => null,
+                'cleanup_at' => null,
+                'step_status' => StepStatus::QUEUED->value,
+                'step_attempt' => 0,
+                'step_started_at' => null,
+                'step_finished_at' => null,
+                'result_json' => null,
+                'error_json' => null,
+                'available_at' => $this->formatDateTime($now),
+                'claimed_at' => null,
+                'claimed_by' => null,
+                'last_error_code' => null,
+                'last_error_message' => null,
+                'cancel_reason' => null,
+                'updated_at' => $this->formatDateTime($now),
+            ]);
 
-        $record = $this->fetchRecordFromStatement($statement, 'Failed to read enqueued queue record.');
-        $this->emitNotification((string) $record->taskId);
+            $record = $this->fetchRecordFromStatement($statement, 'Failed to read enqueued queue record.');
+            $record = $this->update((int) $record->taskId, ['payload_json' => $task->getStoredPayload()], false);
+            $this->emitNotification((string) $record->taskId);
+
+            if ($startedTransaction) {
+                $this->connection->commit();
+            }
+        } catch (\Throwable $throwable) {
+            if ($startedTransaction && $this->connection->inTransaction()) {
+                $this->connection->rollBack();
+            }
+
+            $this->logger->error('Queue enqueue failed.', [
+                'taskClass' => $task::class,
+                'stepClass' => $firstStep::class,
+                'exceptionClass' => $throwable::class,
+                'errorCode' => (int) $throwable->getCode(),
+            ]);
+
+            throw $throwable;
+        }
 
         $this->logger->info('Queue enqueue completed.', [
             'taskId' => $record->taskId,
@@ -314,7 +347,7 @@ SQL,
 
             $parameterName = sprintf('value_%s', $column);
             $assignments[] = sprintf('%s = :%s', $column, $parameterName);
-            $parameters[$parameterName] = $this->normalizeColumnValue($column, $value);
+            $parameters[$parameterName] = $this->normalizeColumnValue($column, $value, $taskId);
         }
 
         if (!array_key_exists('updated_at', $changes)) {
@@ -431,8 +464,22 @@ SQL,
         );
     }
 
-    private function normalizeColumnValue(string $column, mixed $value): mixed {
-        if ($column === 'payload_json' || $column === 'result_json' || $column === 'error_json') {
+    private function normalizeColumnValue(string $column, mixed $value, ?int $taskId = null): mixed {
+        if ($column === 'payload_json') {
+            if ($value === null) {
+                return null;
+            }
+
+            if ($taskId === null) {
+                throw new ConfigurationException('Queue payload_json normalization requires a task ID.');
+            }
+
+            return $this->encodeJson(
+                PayloadNormalizer::normalizeForStorage($value, $this->attachmentBlobStore, $taskId),
+            );
+        }
+
+        if ($column === 'result_json' || $column === 'error_json') {
             return $value === null ? null : $this->encodeJson($value);
         }
 

@@ -7,6 +7,7 @@ namespace ByLexus\DurableTask;
 use ByLexus\DurableTask\Enum\TaskStatus;
 use ByLexus\DurableTask\Exception\ConfigurationException;
 use ByLexus\DurableTask\Metadata\MetadataResolver;
+use ByLexus\DurableTask\Queue\AttachmentBlobStore;
 use ByLexus\DurableTask\Queue\PostgresQueue;
 use ByLexus\DurableTask\Queue\QueueConfiguration;
 use ByLexus\DurableTask\Queue\QueueRecord;
@@ -186,7 +187,7 @@ abstract class Task {
         $record = $queue->enqueue($this, $firstStep);
 
         $firstStep->hydrateFromQueueRecord($record);
-        $this->hydrateFromQueueRecord($record, $firstStep);
+        $this->hydrateFromQueueRecord($record, $firstStep, $queue->getAttachmentBlobStore());
 
         return $record;
     }
@@ -208,6 +209,7 @@ abstract class Task {
         QueueRecord $record,
         ?ContainerInterface $container = null,
         ?LoggerInterface $logger = null,
+        ?AttachmentBlobStore $attachmentBlobStore = null,
     ): self {
         $task = ClassInstantiator::instantiate($record->taskClass, self::class, self::class, $container, $logger);
 
@@ -216,14 +218,18 @@ abstract class Task {
         }
 
         $actualStep = Step::fromQueueRecord($record, $container, $logger);
-        $task->hydrateFromQueueRecord($record, $actualStep);
+        $task->hydrateFromQueueRecord($record, $actualStep, $attachmentBlobStore);
 
         return $task;
     }
 
     abstract public function nextStep(?Step $actStep = null): ?Step;
 
-    protected function hydrateFromQueueRecord(QueueRecord $record, ?Step $actualStep = null): void {
+    protected function hydrateFromQueueRecord(
+        QueueRecord $record,
+        ?Step $actualStep = null,
+        ?AttachmentBlobStore $attachmentBlobStore = null,
+    ): void {
         $this->id = $record->taskId;
         $this->status = TaskStatus::from($record->taskStatus);
         $this->taskAttempt = $record->taskAttempt;
@@ -231,7 +237,7 @@ abstract class Task {
         $this->startedAt = $record->taskStartedAt;
         $this->finishedAt = $record->taskFinishedAt;
         $this->cleanupAt = $record->cleanupAt;
-        $this->setStoredPayload($record->payload);
+        $this->setStoredPayload($record->payload, $attachmentBlobStore);
         $this->cancelRequested = $record->cancelRequested;
         $this->cancelReason = $record->cancelReason;
         $this->actualStep = $actualStep;
@@ -246,8 +252,8 @@ abstract class Task {
         ]);
     }
 
-    protected function setStoredPayload(mixed $payload): void {
-        $this->payload = PayloadNormalizer::normalizeRoot($payload);
+    protected function setStoredPayload(mixed $payload, ?AttachmentBlobStore $attachmentBlobStore = null): void {
+        $this->payload = PayloadNormalizer::hydrateStoredRoot($payload, $attachmentBlobStore);
     }
 
     private function materializeRootPayload(): \stdClass {

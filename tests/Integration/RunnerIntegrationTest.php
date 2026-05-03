@@ -6,6 +6,7 @@ namespace ByLexus\DurableTask\Tests\Integration;
 
 use ByLexus\DurableTask\Enum\StepStatus;
 use ByLexus\DurableTask\Enum\TaskStatus;
+use ByLexus\DurableTask\FileAttachment;
 use ByLexus\DurableTask\Queue\PostgresQueue;
 use ByLexus\DurableTask\Queue\QueueConfiguration;
 use ByLexus\DurableTask\Queue\QueueRecord;
@@ -15,10 +16,12 @@ use ByLexus\DurableTask\RunnerConfiguration;
 use ByLexus\DurableTask\Task;
 use ByLexus\DurableTask\Tests\Fixture\ConstructorInjectedServiceFixture;
 use ByLexus\DurableTask\Tests\Fixture\ConstructorInjectedTaskFixture;
+use ByLexus\DurableTask\Tests\Fixture\AttachmentRoundtripTaskFixture;
 use ByLexus\DurableTask\Tests\Fixture\PayloadHandoffTaskFixture;
 use ByLexus\DurableTask\Tests\Fixture\PayloadMutationTaskFixture;
 use ByLexus\DurableTask\Tests\Fixture\RetainedQueueWorkflowTaskFixture;
 use ByLexus\DurableTask\Tests\Fixture\RunnerExceptionTaskFixture;
+use ByLexus\DurableTask\Tests\Fixture\RunnerNextStepExceptionTaskFixture;
 use ByLexus\DurableTask\Tests\Fixture\RunnerRetryTaskFixture;
 use ByLexus\DurableTask\Tests\Fixture\RunnerTimeoutTaskFixture;
 use ByLexus\DurableTask\Tests\Fixture\QueueWorkflowTaskFixture;
@@ -31,6 +34,80 @@ use PHPUnit\Framework\TestCase;
 
 final class RunnerIntegrationTest extends TestCase
 {
+    public function testRunSingleMarksTaskFailedWhenNextStepThrows(): void {
+        $pdo = PostgresIntegrationConnection::requirePdo($this);
+        $tableName = PostgresIntegrationConnection::uniqueTableName();
+
+        try {
+            $configuration = new QueueConfiguration($tableName);
+            $schemaManager = new SchemaManager($pdo, $configuration);
+            $schemaManager->bootstrap();
+
+            $task = new RunnerNextStepExceptionTaskFixture();
+            $record = $task->enqueue($pdo, $configuration);
+
+            self::assertNotNull($record->taskId);
+
+            $runner = new Runner(
+                $pdo,
+                $configuration,
+                new RunnerConfiguration('runner-next-step-failure'),
+            );
+
+            self::assertSame(1, $runner->runSingle());
+
+            $row = $this->fetchTaskRow($pdo, $tableName, (int) $record->taskId);
+
+            self::assertSame(TaskStatus::FAILED->value, $row['task_status']);
+            self::assertSame(StepStatus::FAILED->value, $row['step_status']);
+            self::assertSame(true, $row['payload_json']['stepCompleted']);
+            self::assertSame('nextStep exploded.', $row['last_error_message']);
+            self::assertSame('failed', $row['result_json']['status']);
+            self::assertSame(true, $row['result_json']['meta']['nextStepFailed']);
+        } finally {
+            PostgresIntegrationConnection::dropTableIfExists($pdo, $tableName);
+        }
+    }
+
+    public function testRunSingleHydratesAttachmentPayloadsForStepExecution(): void {
+        $pdo = PostgresIntegrationConnection::requirePdo($this);
+        $tableName = PostgresIntegrationConnection::uniqueTableName();
+        $sourcePath = tempnam(sys_get_temp_dir(), 'durable-attachment-runner-');
+
+        self::assertIsString($sourcePath);
+
+        try {
+            file_put_contents($sourcePath, 'runner attachment content');
+
+            $configuration = new QueueConfiguration($tableName);
+            $schemaManager = new SchemaManager($pdo, $configuration);
+            $schemaManager->bootstrap();
+
+            $task = new AttachmentRoundtripTaskFixture();
+            $task->getPayload()->attachment = FileAttachment::fromFile($sourcePath);
+            $record = $task->enqueue($pdo, $configuration);
+
+            self::assertNotNull($record->taskId);
+
+            $runner = new Runner(
+                $pdo,
+                $configuration,
+                new RunnerConfiguration('runner-attachment-test'),
+            );
+
+            self::assertSame(1, $runner->runSingle());
+
+            $row = $this->fetchTaskRow($pdo, $tableName, (int) $record->taskId);
+
+            self::assertSame(TaskStatus::SUCCEEDED->value, $row['task_status']);
+            self::assertSame('runner attachment content', $row['payload_json']['attachmentRestoredContent']);
+            self::assertSame('file_attachment', $row['payload_json']['attachment']['__durable_type']);
+        } finally {
+            @unlink($sourcePath);
+            PostgresIntegrationConnection::dropTableIfExists($pdo, $tableName);
+        }
+    }
+
     public function testRunSingleProcessesQueuedTaskToTerminalSuccess(): void {
         $pdo = PostgresIntegrationConnection::requirePdo($this);
         $tableName = PostgresIntegrationConnection::uniqueTableName();

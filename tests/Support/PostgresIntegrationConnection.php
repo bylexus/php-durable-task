@@ -49,6 +49,6 @@ final class PostgresIntegrationConnection
     }
 
     public static function dropTableIfExists(\PDO $pdo, string $tableName): void {
-        $pdo->exec(sprintf('DROP TABLE IF EXISTS "%s"', str_replace('"', '""', $tableName)));
+        $pdo->exec(sprintf('DROP TABLE IF EXISTS "%s" CASCADE', str_replace('"', '""', $tableName)));
     }
 }

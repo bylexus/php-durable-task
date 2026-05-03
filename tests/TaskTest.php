@@ -7,6 +7,7 @@ namespace ByLexus\DurableTask\Tests;
 use ByLexus\DurableTask\Enum\StepStatus;
 use ByLexus\DurableTask\Enum\TaskStatus;
 use ByLexus\DurableTask\Exception\ConfigurationException;
+use ByLexus\DurableTask\FileAttachment;
 use ByLexus\DurableTask\Queue\QueueRecord;
 use ByLexus\DurableTask\Task;
 use ByLexus\DurableTask\Tests\Fixture\ConstructorInjectedServiceFixture;
@@ -167,7 +168,7 @@ final class TaskTest extends TestCase
         self::assertSame($logger, $typedStep->getInjectedLogger());
     }
 
-    public function testTaskReconstitutionFallsBackToNullLoggerWhenConstructorRequestsLoggerWithoutConfiguredOne(): void {
+    public function testTaskReconstitutionUsesNullLoggerFallbackWhenLoggerIsNotConfigured(): void {
         $record = new QueueRecord(
             42,
             LoggerInjectedTaskFixture::class,
@@ -259,6 +260,52 @@ final class TaskTest extends TestCase
         self::assertInstanceOf(\stdClass::class, $task->getStoredPayload());
         self::assertTrue($task->hasStoredPayload());
         self::assertSame($task->getPayload(), $task->getStoredPayload());
+    }
+
+    public function testTaskHydratesAttachmentEnvelopeIntoFileAttachmentObject(): void {
+        $record = new QueueRecord(
+            42,
+            QueueWorkflowTaskFixture::class,
+            QueueWorkflowStepFixture::class,
+            TaskStatus::QUEUED->value,
+            1,
+            new \DateTimeImmutable('2026-01-01T00:00:00+00:00'),
+            null,
+            null,
+            null,
+            StepStatus::QUEUED->value,
+            2,
+            null,
+            null,
+            (object) [
+                'attachment' => (object) [
+                    FileAttachment::TYPE_MARKER_FIELD => FileAttachment::TYPE_MARKER_VALUE,
+                    'blobId' => 15,
+                    'name' => 'invoice.pdf',
+                    'mimeType' => 'application/pdf',
+                    'sizeBytes' => 128,
+                    'sha256' => str_repeat('a', 64),
+                ],
+            ],
+            null,
+            null,
+            new \DateTimeImmutable('2026-01-01T00:00:00+00:00'),
+            null,
+            null,
+            null,
+            null,
+            false,
+            null,
+            new \DateTimeImmutable('2026-01-01T00:00:00+00:00'),
+        );
+
+        $task = Task::fromQueueRecord($record);
+        $attachment = $task->getPayload()->attachment;
+
+        self::assertInstanceOf(FileAttachment::class, $attachment);
+        self::assertSame(15, $attachment->blobId());
+        self::assertSame('invoice.pdf', $attachment->name());
+        self::assertSame('application/pdf', $attachment->mimeType());
     }
 
     public function testPayloadAccessCachesRootAndMaterializedTopLevelObject(): void {

@@ -95,7 +95,7 @@ final class PrintGreetingStep extends Step {
 }
 ```
 
-### Create a Tas class to define your workflow
+### Create a Task class to define your workflow
 
 Now, define the `Task` class to define your workflow: Define the needed payload data used by your steps,
 and create a workflow in the `nextStep` function:
@@ -257,6 +257,42 @@ Payload access patterns:
 - `$task->setPayload(SomeStep::class, $value)` sets a namespaced payload fragment.
 
 The namespaced payload pattern is usually the cleanest way to avoid collisions between steps in a larger workflow.
+
+### File attachments in payloads
+
+Often you want to use files as part of your workflow (e.g. send emails with attachments). The library allows you to store needed files as part of the payload in a separate table.
+
+Use `FileAttachment` to attach files directly in the task payload. The queue stores only metadata plus a blob reference in `payload_json`; the binary content itself is stored in the attachment blob table that `SchemaManager` creates together with the main queue table.
+
+```php
+use ByLexus\DurableTask\FileAttachment;
+
+$task->getPayload()->mail = (object) [
+    'to' => 'alex@example.com',
+    'attachment' => FileAttachment::fromFile(__DIR__ . '/invoice.pdf'),
+];
+```
+
+Inside a step, the hydrated payload value is again a `FileAttachment` object, so you can restore it to a local file when your mailer or external service needs a path:
+
+```php
+use ByLexus\DurableTask\Result\StepResult;
+use ByLexus\DurableTask\Step;
+use ByLexus\DurableTask\Task;
+
+final class SendMailStep extends Step {
+    public function execute(Task $task): StepResult {
+        $attachment = $task->getPayload()->mail->attachment;
+        $targetPath = sys_get_temp_dir() . '/invoice.pdf';
+
+        $attachment->toFile($targetPath);
+
+        // pass $targetPath to your mailer here
+
+        return StepResult::succeeded();
+    }
+}
+```
 
 ## Schema Management
 

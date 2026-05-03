@@ -6,9 +6,12 @@ namespace ByLexus\DurableTask\Tests\Integration;
 
 use ByLexus\DurableTask\Enum\StepStatus;
 use ByLexus\DurableTask\Enum\TaskStatus;
+use ByLexus\DurableTask\FileAttachment;
 use ByLexus\DurableTask\Exception\QueueException;
+use ByLexus\DurableTask\Queue\AttachmentBlobStore;
 use ByLexus\DurableTask\Queue\PostgresQueue;
 use ByLexus\DurableTask\Queue\QueueConfiguration;
+use ByLexus\DurableTask\Queue\QueueRecord;
 use ByLexus\DurableTask\Queue\SchemaManager;
 use ByLexus\DurableTask\Task;
 use ByLexus\DurableTask\Tests\Fixture\QueueWorkflowTaskFixture;
@@ -106,6 +109,178 @@ final class PostgresQueueIntegrationTest extends TestCase
                 $rehydratedTask->actualStep(),
             );
         } finally {
+            PostgresIntegrationConnection::dropTableIfExists($pdo, $tableName);
+        }
+    }
+
+    public function testEnqueueStoresAttachmentMetadataAndHydratesAttachmentFromBlobStore(): void {
+        $pdo = PostgresIntegrationConnection::requirePdo($this);
+        $tableName = PostgresIntegrationConnection::uniqueTableName();
+        $sourcePath = tempnam(sys_get_temp_dir(), 'durable-attachment-source-');
+
+        self::assertIsString($sourcePath);
+
+        try {
+            file_put_contents($sourcePath, 'blob-backed attachment');
+
+            $configuration = new QueueConfiguration($tableName);
+            $schemaManager = new SchemaManager($pdo, $configuration);
+            $schemaManager->bootstrap();
+
+            $task = new QueueWorkflowTaskFixture();
+            $task->getPayload()->attachment = FileAttachment::fromFile($sourcePath);
+            $record = $task->enqueue($pdo, $configuration);
+
+            self::assertNotNull($record->taskId);
+
+            $row = $this->fetchTaskRow($pdo, $tableName, (int) $record->taskId);
+
+            self::assertSame('file_attachment', $row['payload_json']['attachment']['__durable_type']);
+            self::assertSame(basename($sourcePath), $row['payload_json']['attachment']['name']);
+            self::assertSame(1, $this->blobCountForTask($pdo, $configuration, (int) $record->taskId));
+
+            $rehydratedTask = Task::fromQueueRecord(
+                $this->fetchQueueRecord($pdo, $tableName, (int) $record->taskId),
+                null,
+                null,
+                new AttachmentBlobStore($pdo, $configuration),
+            );
+            $attachment = $rehydratedTask->getPayload()->attachment;
+
+            self::assertInstanceOf(FileAttachment::class, $attachment);
+            self::assertSame('blob-backed attachment', $attachment->contents());
+        } finally {
+            @unlink($sourcePath);
+            PostgresIntegrationConnection::dropTableIfExists($pdo, $tableName);
+        }
+    }
+
+    public function testAttachmentRoundtripSupportsNestedObjectsAndArrays(): void {
+        $pdo = PostgresIntegrationConnection::requirePdo($this);
+        $tableName = PostgresIntegrationConnection::uniqueTableName();
+        $primaryPath = tempnam(sys_get_temp_dir(), 'durable-attachment-primary-');
+        $secondaryPath = tempnam(sys_get_temp_dir(), 'durable-attachment-secondary-');
+
+        self::assertIsString($primaryPath);
+        self::assertIsString($secondaryPath);
+
+        try {
+            file_put_contents($primaryPath, 'nested object attachment');
+            file_put_contents($secondaryPath, 'nested array attachment');
+
+            $configuration = new QueueConfiguration($tableName);
+            $schemaManager = new SchemaManager($pdo, $configuration);
+            $schemaManager->bootstrap();
+
+            $task = new QueueWorkflowTaskFixture();
+            $task->getPayload()->details = (object) [
+                'primary' => FileAttachment::fromFile($primaryPath),
+            ];
+            $task->getPayload()->files = [FileAttachment::fromFile($secondaryPath)];
+            $record = $task->enqueue($pdo, $configuration);
+
+            self::assertNotNull($record->taskId);
+
+            $row = $this->fetchTaskRow($pdo, $tableName, (int) $record->taskId);
+
+            self::assertSame('file_attachment', $row['payload_json']['details']['primary']['__durable_type']);
+            self::assertSame('file_attachment', $row['payload_json']['files'][0]['__durable_type']);
+
+            $rehydratedTask = Task::fromQueueRecord(
+                $this->fetchQueueRecord($pdo, $tableName, (int) $record->taskId),
+                null,
+                null,
+                new AttachmentBlobStore($pdo, $configuration),
+            );
+
+            self::assertInstanceOf(FileAttachment::class, $rehydratedTask->getPayload()->details->primary);
+            self::assertIsArray($rehydratedTask->getPayload()->files);
+            self::assertInstanceOf(FileAttachment::class, $rehydratedTask->getPayload()->files[0]);
+            self::assertSame('nested object attachment', $rehydratedTask->getPayload()->details->primary->contents());
+            self::assertSame('nested array attachment', $rehydratedTask->getPayload()->files[0]->contents());
+        } finally {
+            @unlink($primaryPath);
+            @unlink($secondaryPath);
+            PostgresIntegrationConnection::dropTableIfExists($pdo, $tableName);
+        }
+    }
+
+    public function testSharedAttachmentInstanceIsStoredOnlyOnce(): void {
+        $pdo = PostgresIntegrationConnection::requirePdo($this);
+        $tableName = PostgresIntegrationConnection::uniqueTableName();
+        $sourcePath = tempnam(sys_get_temp_dir(), 'durable-attachment-shared-');
+
+        self::assertIsString($sourcePath);
+
+        try {
+            file_put_contents($sourcePath, 'shared attachment');
+
+            $configuration = new QueueConfiguration($tableName);
+            $schemaManager = new SchemaManager($pdo, $configuration);
+            $schemaManager->bootstrap();
+
+            $sharedAttachment = FileAttachment::fromFile($sourcePath);
+            $task = new QueueWorkflowTaskFixture();
+            $task->getPayload()->details = (object) ['primary' => $sharedAttachment];
+            $task->getPayload()->files = [$sharedAttachment];
+            $record = $task->enqueue($pdo, $configuration);
+
+            self::assertNotNull($record->taskId);
+
+            $row = $this->fetchTaskRow($pdo, $tableName, (int) $record->taskId);
+
+            self::assertSame(1, $this->blobCountForTask($pdo, $configuration, (int) $record->taskId));
+            self::assertSame(
+                $row['payload_json']['details']['primary']['blobId'],
+                $row['payload_json']['files'][0]['blobId'],
+            );
+        } finally {
+            @unlink($sourcePath);
+            PostgresIntegrationConnection::dropTableIfExists($pdo, $tableName);
+        }
+    }
+
+    public function testDeleteExpiredAlsoDeletesAttachmentBlobRowsThroughCascade(): void {
+        $pdo = PostgresIntegrationConnection::requirePdo($this);
+        $tableName = PostgresIntegrationConnection::uniqueTableName();
+        $sourcePath = tempnam(sys_get_temp_dir(), 'durable-attachment-expired-');
+
+        self::assertIsString($sourcePath);
+
+        try {
+            file_put_contents($sourcePath, 'expired attachment');
+
+            $configuration = new QueueConfiguration($tableName);
+            $schemaManager = new SchemaManager($pdo, $configuration);
+            $schemaManager->bootstrap();
+
+            $queue = new PostgresQueue($pdo, $configuration);
+            $task = new QueueWorkflowTaskFixture();
+            $task->getPayload()->attachment = FileAttachment::fromFile($sourcePath);
+            $record = $task->enqueue($pdo, $configuration);
+
+            self::assertNotNull($record->taskId);
+            self::assertSame(1, $this->blobCountForTask($pdo, $configuration, (int) $record->taskId));
+
+            $past = new \DateTimeImmutable('-1 hour');
+            $this->updateTask(
+                $pdo,
+                $queue,
+                (int) $record->taskId,
+                [
+                    'task_status' => TaskStatus::SUCCEEDED,
+                    'step_status' => StepStatus::SUCCEEDED,
+                    'task_finished_at' => $past,
+                    'step_finished_at' => $past,
+                    'cleanup_at' => $past,
+                ],
+            );
+
+            self::assertSame(1, $queue->deleteExpired());
+            self::assertFalse($this->taskExists($pdo, $tableName, (int) $record->taskId));
+            self::assertSame(0, $this->blobCountForTask($pdo, $configuration, (int) $record->taskId));
+        } finally {
+            @unlink($sourcePath);
             PostgresIntegrationConnection::dropTableIfExists($pdo, $tableName);
         }
     }
@@ -272,6 +447,49 @@ final class PostgresQueueIntegrationTest extends TestCase
         $statement->execute(['task_id' => $taskId]);
 
         return (bool) $statement->fetchColumn();
+    }
+
+    /** @return array<string, mixed> */
+    private function fetchTaskRow(\PDO $pdo, string $tableName, int $taskId): array {
+        $statement = $pdo->prepare(
+            sprintf('SELECT * FROM "%s" WHERE task_id = :task_id', str_replace('"', '""', $tableName)),
+        );
+        $statement->execute(['task_id' => $taskId]);
+        $row = $statement->fetch(\PDO::FETCH_ASSOC);
+
+        self::assertIsArray($row);
+
+        foreach (['payload_json', 'result_json', 'error_json'] as $column) {
+            if (isset($row[$column]) && is_string($row[$column])) {
+                $row[$column] = json_decode($row[$column], true, 512, JSON_THROW_ON_ERROR);
+            }
+        }
+
+        return $row;
+    }
+
+    private function fetchQueueRecord(\PDO $pdo, string $tableName, int $taskId): QueueRecord {
+        $statement = $pdo->prepare(
+            sprintf('SELECT * FROM "%s" WHERE task_id = :task_id', str_replace('"', '""', $tableName)),
+        );
+        $statement->execute(['task_id' => $taskId]);
+        $row = $statement->fetch(\PDO::FETCH_ASSOC);
+
+        self::assertIsArray($row);
+
+        return QueueRecord::fromDatabaseRow($row);
+    }
+
+    private function blobCountForTask(\PDO $pdo, QueueConfiguration $configuration, int $taskId): int {
+        $statement = $pdo->prepare(
+            sprintf(
+                'SELECT COUNT(*) FROM "%s" WHERE task_id = :task_id',
+                str_replace('"', '""', $configuration->getBlobTableName()),
+            ),
+        );
+        $statement->execute(['task_id' => $taskId]);
+
+        return (int) $statement->fetchColumn();
     }
 
     /**

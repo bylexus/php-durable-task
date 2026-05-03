@@ -7,6 +7,7 @@ namespace ByLexus\DurableTask;
 use ByLexus\DurableTask\Attribute\CleanupAfter;
 use ByLexus\DurableTask\Enum\StepStatus;
 use ByLexus\DurableTask\Enum\TaskStatus;
+use ByLexus\DurableTask\Enum\RetryMode;
 use ByLexus\DurableTask\Exception\ConfigurationException;
 use ByLexus\DurableTask\Metadata\MetadataResolver;
 use ByLexus\DurableTask\Queue\PostgresQueue;
@@ -197,6 +198,7 @@ class Runner {
                 $record,
                 $this->runnerConfiguration->getContainer(),
                 $this->logger,
+                $this->queue->getAttachmentBlobStore(),
             );
             $step = $task->actualStep();
 
@@ -242,7 +244,18 @@ class Runner {
 
         try {
             $task->updateStep($step, $result);
-            $nextStep = $task->nextStep($step);
+            $nextStep = null;
+            $retryMode = $stepMetadata->getRetryMode();
+            $retries = $stepMetadata->getRetries();
+
+            try {
+                $nextStep = $task->nextStep($step);
+            } catch (\Throwable $throwable) {
+                $result = $this->failedResultFromNextStepException($task, $step, $throwable);
+                $task->updateStep($step, $result);
+                $retryMode = RetryMode::FAIL;
+                $retries = 0;
+            }
 
             if ($nextStep !== null) {
                 $nextStep->setLogger($this->logger);
@@ -260,8 +273,8 @@ class Runner {
                 $result,
                 $nextStep,
                 $taskMetadata,
-                $stepMetadata->getRetryMode(),
-                $stepMetadata->getRetries(),
+                $retryMode,
+                $retries,
             );
             $this->logger->info('Runner persisting task result.', [
                 'runnerId' => $this->runnerConfiguration->getRunnerId(),
@@ -383,6 +396,27 @@ class Runner {
         }
 
         return $result;
+    }
+
+    private function failedResultFromNextStepException(Task $task, Step $step, \Throwable $throwable): StepResult {
+        $this->logger->error('Runner caught nextStep exception.', [
+            'runnerId' => $this->runnerConfiguration->getRunnerId(),
+            'taskId' => $task->getId(),
+            'taskClass' => $task::class,
+            'stepClass' => $step::class,
+            'exceptionClass' => $throwable::class,
+            'errorCode' => (int) $throwable->getCode(),
+        ]);
+
+        return StepResult::failed(
+            errorInfo: new ErrorInfo(
+                (int) $throwable->getCode(),
+                $throwable->getMessage(),
+                ['exception' => $throwable::class, 'nextStepFailed' => true],
+            ),
+            meta: ['nextStepFailed' => true],
+            message: $throwable->getMessage(),
+        );
     }
 
     private function persistClaimFailure(QueueRecord $record, \Throwable $throwable): void {
@@ -508,7 +542,9 @@ class Runner {
 
         $changes['task_finished_at'] = $now;
         $changes['step_finished_at'] = $now;
-        $changes['cleanup_at'] = $now->add($this->resolveCleanupAfterIntervalForStatus($taskMetadata, $result->getStatus()));
+        $changes['cleanup_at'] = $now->add(
+            $this->resolveCleanupAfterIntervalForStatus($taskMetadata, $result->getStatus()),
+        );
 
         if ($result->getStatus() === StepStatus::SUCCEEDED) {
             $this->logger->info('Runner marked task as succeeded.', [

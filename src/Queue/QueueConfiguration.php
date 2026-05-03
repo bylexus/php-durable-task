@@ -16,6 +16,7 @@ namespace ByLexus\DurableTask\Queue;
 final class QueueConfiguration
 {
     public const DEFAULT_TABLE_NAME = 'durable_task_queue';
+    public const BLOB_TABLE_SUFFIX = '_blob_data';
 
     private string $tableName;
 
@@ -25,5 +26,9 @@ final class QueueConfiguration
 
     public function getTableName(): string {
         return $this->tableName;
+    }
+
+    public function getBlobTableName(): string {
+        return $this->tableName . self::BLOB_TABLE_SUFFIX;
     }
 }
