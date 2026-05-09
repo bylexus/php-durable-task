@@ -225,7 +225,7 @@ final class TaskTest extends TestCase
         $this->expectException(ConfigurationException::class);
         $this->expectExceptionMessage('Task priority must be between 1 and 5, got 0.');
 
-        $task->enqueue($this->createStub(\PDO::class), null, null, 0);
+        $task->enqueue($this->createStub(\PDO::class), 0, null, null);
     }
 
     public function testNullPayloadIsExposedAsObjectOnTaskWhenStepIsHydrated(): void {

@@ -132,11 +132,11 @@ final class PostgresQueueIntegrationTest extends TestCase
 
             $lowPriorityTask = new QueueWorkflowTaskFixture();
             $lowPriorityTask->setPayload(['job' => 'low']);
-            $lowPriorityTask->enqueue($pdo, $configuration, null, Task::PRIO_VERY_LOW);
+            $lowPriorityTask->enqueue($pdo, Task::PRIO_VERY_LOW, $configuration, null);
 
             $highPriorityTask = new QueueWorkflowTaskFixture();
             $highPriorityTask->setPayload(['job' => 'high']);
-            $highPriorityTask->enqueue($pdo, $configuration, null, Task::PRIO_VERY_HIGH);
+            $highPriorityTask->enqueue($pdo, Task::PRIO_VERY_HIGH, $configuration, null);
 
             $queue = new PostgresQueue($pdo, $configuration);
 

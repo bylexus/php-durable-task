@@ -142,6 +142,18 @@ $task->enqueue($pdo);
 $task->enqueue($pdo, priority: Task::PRIO_HIGH);
 ```
 
+If you want to keep the queue connection and queue configuration together, create a `QueueContext` once and reuse it:
+
+```php
+use ByLexus\DurableTask\Queue\QueueConfiguration;
+use ByLexus\DurableTask\QueueContext;
+
+$queueConfiguration = new QueueConfiguration('app_background_jobs', 'background_jobs');
+$queue = new QueueContext($pdo, $queueConfiguration);
+$queue->enqueue((new GreetingTask())->withName('Ada Lovelace'));
+$queue->enqueue((new GreetingTask())->withName('Grace Hopper'), priority: Task::PRIO_HIGH);
+```
+
 Tasks default to priority `3` (`Task::PRIO_NORMAL`). You can choose values from `1` to `5` using the built-in constants:
 
 - `Task::PRIO_VERY_HIGH` = `1`
@@ -168,6 +180,19 @@ $runner = new Runner(
 
 // start the processing loop:
 $processed = $runner->runLoop();
+```
+
+With `QueueContext`, the same setup becomes:
+
+```php
+use ByLexus\DurableTask\Queue\QueueConfiguration;
+use ByLexus\DurableTask\QueueContext;
+use ByLexus\DurableTask\RunnerConfiguration;
+
+$queueConfiguration = new QueueConfiguration('app_background_jobs', 'background_jobs');
+$queue = new QueueContext($pdo, $queueConfiguration);
+$runner = $queue->createRunner(new RunnerConfiguration());
+$runner->runLoop();
 ```
 
 ## Concepts
@@ -335,6 +360,19 @@ use ByLexus\DurableTask\Queue\SchemaManager;
 (new SchemaManager($pdo))->bootstrap();
 ```
 
+If you already use a `QueueContext`, the same wrapper can also manage the schema for that queue:
+
+```php
+use ByLexus\DurableTask\Queue\QueueConfiguration;
+use ByLexus\DurableTask\QueueContext;
+
+$queueConfiguration = new QueueConfiguration('app_background_jobs', 'background_jobs');
+$queue = new QueueContext($pdo, $queueConfiguration);
+$queue->bootstrapSchema();
+$queue->validateSchema();
+$ddl = $queue->exportDdl();
+```
+
 This is the most predictable option in production. It creates the queue table if not present, and / or updates it.
 
 The queue schema includes a `priority` column with default value `3`, so existing producers can keep enqueueing tasks without passing a priority explicitly.
@@ -369,6 +407,7 @@ Use `QueueConfiguration` when you want more than one queue table, need a non-def
 
 ```php
 use ByLexus\DurableTask\Queue\QueueConfiguration;
+use ByLexus\DurableTask\QueueContext;
 
 $queueConfiguration = new QueueConfiguration('app_background_jobs');
 
@@ -379,9 +418,15 @@ $runner = new Runner(
     queueConfiguration: $queueConfiguration,
     runnerConfiguration: $runnerConfiguration,
 );
+
+$queue = new QueueContext($pdo, $queueConfiguration);
+$queue->enqueue($task);
+$queue->createRunner($runnerConfiguration)->runLoop();
 ```
 
 The same `QueueConfiguration` must be used consistently by producers, runners, and schema bootstrap.
+
+`QueueContext` is the simplest way to enforce that consistency in application code because it also exposes `createSchemaManager()`, `bootstrapSchema()`, `validateSchema()`, `tableExists()`, `blobTableExists()`, and `exportDdl()` on the same shared queue context.
 
 To place the queue in a specific schema, pass the schema name as the second argument:
 

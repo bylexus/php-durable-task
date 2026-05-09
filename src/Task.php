@@ -170,9 +170,9 @@ abstract class Task {
 
     public function enqueue(
         \PDO $connection,
+        int $priority = self::PRIO_NORMAL,
         ?QueueConfiguration $configuration = null,
         ?MetadataResolver $metadataResolver = null,
-        int $priority = self::PRIO_NORMAL,
     ): QueueRecord {
         self::assertValidPriority($priority);
 
