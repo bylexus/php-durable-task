@@ -19,13 +19,19 @@ final class QueueConfiguration
     public const BLOB_TABLE_SUFFIX = '_blob_data';
 
     private string $tableName;
+    private ?string $schemaName;
 
-    public function __construct(string $tableName = self::DEFAULT_TABLE_NAME) {
+    public function __construct(string $tableName = self::DEFAULT_TABLE_NAME, ?string $schemaName = null) {
         $this->tableName = $tableName;
+        $this->schemaName = $schemaName;
     }
 
     public function getTableName(): string {
         return $this->tableName;
+    }
+
+    public function getSchemaName(): ?string {
+        return $this->schemaName;
     }
 
     public function getBlobTableName(): string {

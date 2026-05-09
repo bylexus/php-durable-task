@@ -344,6 +344,7 @@ The queue schema includes a `priority` column with default value `3`, so existin
 ```bash
 php bin/dump-schema.php
 php bin/dump-schema.php custom_queue_table
+php bin/dump-schema.php custom_queue_table background_jobs
 ```
 
 This prints the exact `CREATE TABLE` and `CREATE INDEX` statements for the configured queue table.
@@ -362,9 +363,9 @@ $runner = new Runner(connection: $pdo, runnerConfiguration: $runnerConfiguration
 
 This is useful for local development or controlled deployments. It is optional and disabled by default.
 
-### Custom queue table names
+### Custom queue tables and schemas
 
-Use `QueueConfiguration` when you want more than one queue table or need a non-default name.
+Use `QueueConfiguration` when you want more than one queue table, need a non-default name, or want to place queue objects in a dedicated PostgreSQL schema.
 
 ```php
 use ByLexus\DurableTask\Queue\QueueConfiguration;
@@ -381,6 +382,14 @@ $runner = new Runner(
 ```
 
 The same `QueueConfiguration` must be used consistently by producers, runners, and schema bootstrap.
+
+To place the queue in a specific schema, pass the schema name as the second argument:
+
+```php
+$queueConfiguration = new QueueConfiguration('app_background_jobs', 'background_jobs');
+```
+
+Schema bootstrap will create the schema automatically when needed.
 
 ## Running Workers
 

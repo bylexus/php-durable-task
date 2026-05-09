@@ -48,7 +48,27 @@ final class PostgresIntegrationConnection
         return sprintf('%s_%s', $prefix, bin2hex(random_bytes(6)));
     }
 
-    public static function dropTableIfExists(\PDO $pdo, string $tableName): void {
-        $pdo->exec(sprintf('DROP TABLE IF EXISTS "%s" CASCADE', str_replace('"', '""', $tableName)));
+    public static function uniqueSchemaName(string $prefix = 'durable_task_queue_schema_test'): string {
+        return sprintf('%s_%s', $prefix, bin2hex(random_bytes(6)));
+    }
+
+    public static function dropTableIfExists(\PDO $pdo, string $tableName, ?string $schemaName = null): void {
+        $pdo->exec(sprintf('DROP TABLE IF EXISTS %s CASCADE', self::qualifiedIdentifier($schemaName, $tableName)));
+    }
+
+    public static function dropSchemaIfExists(\PDO $pdo, string $schemaName): void {
+        $pdo->exec(sprintf('DROP SCHEMA IF EXISTS %s CASCADE', self::quotedIdentifier($schemaName)));
+    }
+
+    private static function qualifiedIdentifier(?string $schemaName, string $identifier): string {
+        if ($schemaName === null) {
+            return self::quotedIdentifier($identifier);
+        }
+
+        return sprintf('%s.%s', self::quotedIdentifier($schemaName), self::quotedIdentifier($identifier));
+    }
+
+    private static function quotedIdentifier(string $identifier): string {
+        return '"' . str_replace('"', '""', $identifier) . '"';
     }
 }

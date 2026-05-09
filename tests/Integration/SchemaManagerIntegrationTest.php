@@ -128,36 +128,61 @@ SQL,
         }
     }
 
-    private function columnExists(\PDO $pdo, string $tableName, string $columnName): bool {
+    public function testBootstrapCreatesConfiguredSchemaAndTablesInsideIt(): void {
+        $pdo = PostgresIntegrationConnection::requirePdo($this);
+        $tableName = PostgresIntegrationConnection::uniqueTableName();
+        $schemaName = PostgresIntegrationConnection::uniqueSchemaName();
+
+        try {
+            $configuration = new QueueConfiguration($tableName, $schemaName);
+            $schemaManager = new SchemaManager($pdo, $configuration);
+
+            $schemaManager->bootstrap();
+
+            self::assertTrue($schemaManager->tableExists());
+            self::assertTrue($schemaManager->blobTableExists());
+            self::assertTrue($this->columnExists($pdo, $tableName, 'cleanup_at', $schemaName));
+            self::assertTrue($this->columnExists($pdo, $configuration->getBlobTableName(), 'content', $schemaName));
+            self::assertTrue($this->indexExists($pdo, sprintf('%s_cleanup_at_idx', $tableName), $schemaName));
+        } finally {
+            PostgresIntegrationConnection::dropSchemaIfExists($pdo, $schemaName);
+        }
+    }
+
+    private function columnExists(\PDO $pdo, string $tableName, string $columnName, ?string $schemaName = null): bool {
         $statement = $pdo->prepare(
-            'SELECT EXISTS (
-                SELECT 1
-                FROM information_schema.columns
-                WHERE table_schema = current_schema()
-                  AND table_name = :table_name
-                  AND column_name = :column_name
-            )',
+            sprintf(
+                'SELECT EXISTS (
+                    SELECT 1
+                    FROM information_schema.columns
+                    WHERE table_schema = %s
+                      AND table_name = :table_name
+                      AND column_name = :column_name
+                )',
+                $schemaName === null ? 'current_schema()' : ':schema_name',
+            ),
         );
-        $statement->execute([
+        $statement->execute($this->schemaParameters($schemaName, [
             'table_name' => $tableName,
             'column_name' => $columnName,
-        ]);
+        ]));
 
         return (bool) $statement->fetchColumn();
     }
 
-    private function taskIdIsIdentityColumn(\PDO $pdo, string $tableName): bool {
-        $statement = $pdo->prepare(
+    private function taskIdIsIdentityColumn(\PDO $pdo, string $tableName, ?string $schemaName = null): bool {
+        $statement = $pdo->prepare(sprintf(
             'SELECT is_identity, identity_generation
                 FROM information_schema.columns
-                WHERE table_schema = current_schema()
+                WHERE table_schema = %s
                   AND table_name = :table_name
                   AND column_name = :column_name',
-        );
-        $statement->execute([
+            $schemaName === null ? 'current_schema()' : ':schema_name',
+        ));
+        $statement->execute($this->schemaParameters($schemaName, [
             'table_name' => $tableName,
             'column_name' => 'task_id',
-        ]);
+        ]));
 
         $row = $statement->fetch(\PDO::FETCH_ASSOC);
 
@@ -168,34 +193,54 @@ SQL,
         return $row['is_identity'] === 'YES' && $row['identity_generation'] === 'BY DEFAULT';
     }
 
-    private function columnAllowsNulls(\PDO $pdo, string $tableName, string $columnName): bool {
-        $statement = $pdo->prepare(
+    private function columnAllowsNulls(
+        \PDO $pdo,
+        string $tableName,
+        string $columnName,
+        ?string $schemaName = null,
+    ): bool {
+        $statement = $pdo->prepare(sprintf(
             'SELECT is_nullable
                 FROM information_schema.columns
-                WHERE table_schema = current_schema()
+                WHERE table_schema = %s
                   AND table_name = :table_name
                   AND column_name = :column_name',
-        );
-        $statement->execute([
+            $schemaName === null ? 'current_schema()' : ':schema_name',
+        ));
+        $statement->execute($this->schemaParameters($schemaName, [
             'table_name' => $tableName,
             'column_name' => $columnName,
-        ]);
+        ]));
 
         return $statement->fetchColumn() === 'YES';
     }
 
-    private function indexExists(\PDO $pdo, string $indexName): bool {
-        $statement = $pdo->prepare(
+    private function indexExists(\PDO $pdo, string $indexName, ?string $schemaName = null): bool {
+        $statement = $pdo->prepare(sprintf(
             'SELECT EXISTS (
                 SELECT 1
                 FROM pg_indexes
-                WHERE schemaname = current_schema()
+                WHERE schemaname = %s
                   AND indexname = :index_name
             )',
-        );
-        $statement->execute(['index_name' => $indexName]);
+            $schemaName === null ? 'current_schema()' : ':schema_name',
+        ));
+        $statement->execute($this->schemaParameters($schemaName, ['index_name' => $indexName]));
 
         return (bool) $statement->fetchColumn();
+    }
+
+    /** @param array<string, scalar|null> $parameters
+     * @return array<string, scalar|null>
+     */
+    private function schemaParameters(?string $schemaName, array $parameters): array {
+        if ($schemaName === null) {
+            return $parameters;
+        }
+
+        $parameters['schema_name'] = $schemaName;
+
+        return $parameters;
     }
 
     /** @return list<string> */

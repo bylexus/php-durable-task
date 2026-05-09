@@ -43,4 +43,22 @@ final class SchemaManagerTest extends TestCase
 
         self::assertInstanceOf(SchemaManager::class, $schemaManager);
     }
+
+    public function testExportDdlUsesConfiguredSchemaWhenProvided(): void {
+        $ddl = SchemaManager::exportDdl(new QueueConfiguration('custom_queue', 'custom_schema'));
+
+        self::assertStringContainsString('CREATE SCHEMA IF NOT EXISTS "custom_schema"', $ddl);
+        self::assertStringContainsString(
+            'CREATE TABLE IF NOT EXISTS "custom_schema"."custom_queue"',
+            $ddl,
+        );
+        self::assertStringContainsString(
+            'CREATE TABLE IF NOT EXISTS "custom_schema"."custom_queue_blob_data"',
+            $ddl,
+        );
+        self::assertStringContainsString(
+            'ALTER TABLE "custom_schema"."custom_queue" ADD COLUMN IF NOT EXISTS priority INTEGER NOT NULL DEFAULT 3',
+            $ddl,
+        );
+    }
 }

@@ -25,6 +25,9 @@ use Psr\Log\NullLogger;
  * (c) Alexander Schenkel <info@alexi.ch>
  */
 final class PostgresQueue {
+    private const MAX_NOTIFICATION_CHANNEL_LENGTH = 63;
+    private const NOTIFICATION_CHANNEL_HASH_LENGTH = 12;
+
     /** @var list<string> */
     private const UPDATABLE_COLUMNS = [
         'task_status',
@@ -420,13 +423,30 @@ SQL,
     }
 
     public function getNotificationChannel(): string {
-        $sanitizedTableName = preg_replace(
-            '/[^a-zA-Z0-9_]+/',
-            '_',
-            $this->configuration->getTableName(),
-        ) ?? 'durable_task_queue';
+        $nameParts = [];
 
-        return sprintf('%s_notify', trim($sanitizedTableName, '_'));
+        if ($this->configuration->getSchemaName() !== null) {
+            $nameParts[] = $this->sanitizeIdentifierPart($this->configuration->getSchemaName()) ?? 'queue';
+        }
+
+        $nameParts[] = $this->sanitizeIdentifierPart($this->configuration->getTableName()) ?? 'durable_task_queue';
+
+        $channelBase = trim(implode('_', $nameParts), '_');
+
+        if ($channelBase === '') {
+            $channelBase = 'durable_task_queue';
+        }
+
+        $channel = sprintf('%s_notify', $channelBase);
+
+        if (strlen($channel) <= self::MAX_NOTIFICATION_CHANNEL_LENGTH) {
+            return $channel;
+        }
+
+        $hash = substr(hash('sha1', $channel), 0, self::NOTIFICATION_CHANNEL_HASH_LENGTH);
+        $maxBaseLength = self::MAX_NOTIFICATION_CHANNEL_LENGTH - strlen('_notify_') - strlen($hash);
+
+        return sprintf('%s_notify_%s', substr($channelBase, 0, $maxBaseLength), $hash);
     }
 
     private function emitNotification(string $payload = ''): void {
@@ -518,10 +538,25 @@ SQL,
     }
 
     private function quotedTableName(): string {
-        return $this->quotedIdentifier($this->configuration->getTableName());
+        return $this->qualifiedIdentifier(
+            $this->configuration->getSchemaName(),
+            $this->configuration->getTableName(),
+        );
     }
 
     private function quotedIdentifier(string $identifier): string {
         return '"' . str_replace('"', '""', $identifier) . '"';
+    }
+
+    private function qualifiedIdentifier(?string $schemaName, string $identifier): string {
+        if ($schemaName === null) {
+            return $this->quotedIdentifier($identifier);
+        }
+
+        return sprintf('%s.%s', $this->quotedIdentifier($schemaName), $this->quotedIdentifier($identifier));
+    }
+
+    private function sanitizeIdentifierPart(string $identifier): ?string {
+        return preg_replace('/[^a-zA-Z0-9_]+/', '_', $identifier);
     }
 }

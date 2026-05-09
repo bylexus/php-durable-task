@@ -56,18 +56,24 @@ final class SchemaManager {
     ];
 
     private \PDO $connection;
-    private QueueConfiguration $configuration;
+    private \ByLexus\DurableTask\Queue\QueueConfiguration $configuration;
 
-    public function __construct(\PDO $connection, ?QueueConfiguration $configuration = null) {
+    public function __construct(
+        \PDO $connection,
+        ?\ByLexus\DurableTask\Queue\QueueConfiguration $configuration = null,
+    ) {
         $this->connection = $connection;
-        $this->configuration = $configuration ?? new QueueConfiguration();
+        $this->configuration = $configuration ?? new \ByLexus\DurableTask\Queue\QueueConfiguration();
     }
 
     /** @return list<string> */
-    private static function bootstrapStatements(?QueueConfiguration $configuration = null): array {
-        $configuration ??= new QueueConfiguration();
+    private static function bootstrapStatements(
+        ?\ByLexus\DurableTask\Queue\QueueConfiguration $configuration = null,
+    ): array {
+        $configuration ??= new \ByLexus\DurableTask\Queue\QueueConfiguration();
 
         return array_merge(
+            self::schemaStatementsFor($configuration),
             [
                 self::tableStatement($configuration),
                 self::priorityMigrationStatement($configuration),
@@ -77,7 +83,7 @@ final class SchemaManager {
         );
     }
 
-    public static function exportDdl(?QueueConfiguration $configuration = null): string {
+    public static function exportDdl(?\ByLexus\DurableTask\Queue\QueueConfiguration $configuration = null): string {
         return implode(";\n\n", self::bootstrapStatements($configuration)) . ";\n";
     }
 
@@ -126,28 +132,30 @@ final class SchemaManager {
     }
 
     private function schemaTableExists(string $tableName): bool {
-        $statement = $this->connection->prepare(
+        $statement = $this->connection->prepare(sprintf(
             'SELECT EXISTS (
                 SELECT 1
                 FROM information_schema.tables
-                WHERE table_schema = current_schema()
+                WHERE table_schema = %s
                   AND table_name = :table_name
             )',
-        );
-        $statement->execute(['table_name' => $tableName]);
+            $this->configuredSchemaExpression(),
+        ));
+        $statement->execute($this->schemaQueryParameters(['table_name' => $tableName]));
 
         return (bool) $statement->fetchColumn();
     }
 
     /** @return list<string> */
     private function fetchColumnNames(string $tableName): array {
-        $statement = $this->connection->prepare(
+        $statement = $this->connection->prepare(sprintf(
             'SELECT column_name
                 FROM information_schema.columns
-                WHERE table_schema = current_schema()
+                WHERE table_schema = %s
                   AND table_name = :table_name',
-        );
-        $statement->execute(['table_name' => $tableName]);
+            $this->configuredSchemaExpression(),
+        ));
+        $statement->execute($this->schemaQueryParameters(['table_name' => $tableName]));
 
         /** @var list<string> $columnNames */
         $columnNames = $statement->fetchAll(\PDO::FETCH_COLUMN);
@@ -155,7 +163,7 @@ final class SchemaManager {
         return $columnNames;
     }
 
-    private static function tableStatement(QueueConfiguration $configuration): string {
+    private static function tableStatement(\ByLexus\DurableTask\Queue\QueueConfiguration $configuration): string {
         return sprintf(
             <<<'SQL'
 CREATE TABLE IF NOT EXISTS %s (
@@ -190,14 +198,16 @@ SQL,
         );
     }
 
-    private static function priorityMigrationStatement(QueueConfiguration $configuration): string {
+    private static function priorityMigrationStatement(
+        \ByLexus\DurableTask\Queue\QueueConfiguration $configuration,
+    ): string {
         return sprintf(
             'ALTER TABLE %s ADD COLUMN IF NOT EXISTS priority INTEGER NOT NULL DEFAULT 3',
             self::quotedTableName($configuration),
         );
     }
 
-    private static function blobTableStatement(QueueConfiguration $configuration): string {
+    private static function blobTableStatement(\ByLexus\DurableTask\Queue\QueueConfiguration $configuration): string {
         return sprintf(
             <<<'SQL'
 CREATE TABLE IF NOT EXISTS %s (
@@ -217,7 +227,18 @@ SQL,
     }
 
     /** @return list<string> */
-    private static function indexStatementsFor(QueueConfiguration $configuration): array {
+    private static function schemaStatementsFor(\ByLexus\DurableTask\Queue\QueueConfiguration $configuration): array {
+        $schemaName = $configuration->getSchemaName();
+
+        if ($schemaName === null) {
+            return [];
+        }
+
+        return [sprintf('CREATE SCHEMA IF NOT EXISTS %s', self::quotedIdentifier($schemaName))];
+    }
+
+    /** @return list<string> */
+    private static function indexStatementsFor(\ByLexus\DurableTask\Queue\QueueConfiguration $configuration): array {
         $tableName = self::quotedTableName($configuration);
 
         return [
@@ -249,15 +270,18 @@ SQL,
         ];
     }
 
-    private static function quotedTableName(QueueConfiguration $configuration): string {
-        return self::quotedIdentifier($configuration->getTableName());
+    private static function quotedTableName(\ByLexus\DurableTask\Queue\QueueConfiguration $configuration): string {
+        return self::qualifiedIdentifier($configuration->getSchemaName(), $configuration->getTableName());
     }
 
-    private static function quotedBlobTableName(QueueConfiguration $configuration): string {
-        return self::quotedIdentifier($configuration->getBlobTableName());
+    private static function quotedBlobTableName(\ByLexus\DurableTask\Queue\QueueConfiguration $configuration): string {
+        return self::qualifiedIdentifier($configuration->getSchemaName(), $configuration->getBlobTableName());
     }
 
-    private static function derivedName(QueueConfiguration $configuration, string $suffix): string {
+    private static function derivedName(
+        \ByLexus\DurableTask\Queue\QueueConfiguration $configuration,
+        string $suffix,
+    ): string {
         $sanitizedTableName = preg_replace('/[^a-zA-Z0-9_]+/', '_', $configuration->getTableName()) ?? 'queue';
 
         return sprintf('%s_%s', trim($sanitizedTableName, '_'), $suffix);
@@ -265,5 +289,30 @@ SQL,
 
     private static function quotedIdentifier(string $identifier): string {
         return '"' . str_replace('"', '""', $identifier) . '"';
+    }
+
+    private static function qualifiedIdentifier(?string $schemaName, string $identifier): string {
+        if ($schemaName === null) {
+            return self::quotedIdentifier($identifier);
+        }
+
+        return sprintf('%s.%s', self::quotedIdentifier($schemaName), self::quotedIdentifier($identifier));
+    }
+
+    private function configuredSchemaExpression(): string {
+        return $this->configuration->getSchemaName() === null ? 'current_schema()' : ':schema_name';
+    }
+
+    /** @param array<string, scalar|null> $parameters
+     * @return array<string, scalar|null>
+     */
+    private function schemaQueryParameters(array $parameters): array {
+        if ($this->configuration->getSchemaName() === null) {
+            return $parameters;
+        }
+
+        $parameters['schema_name'] = $this->configuration->getSchemaName();
+
+        return $parameters;
     }
 }

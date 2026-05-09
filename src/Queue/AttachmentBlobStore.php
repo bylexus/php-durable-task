@@ -87,15 +87,18 @@ final class AttachmentBlobStore {
     }
 
     public function tableExists(): bool {
-        $statement = $this->connection->prepare(
+        $statement = $this->connection->prepare(sprintf(
             'SELECT EXISTS (
                 SELECT 1
                 FROM information_schema.tables
-                WHERE table_schema = current_schema()
+                WHERE table_schema = %s
                   AND table_name = :table_name
             )',
-        );
-        $statement->execute(['table_name' => $this->configuration->getBlobTableName()]);
+            $this->configuredSchemaExpression(),
+        ));
+        $statement->execute($this->schemaQueryParameters([
+            'table_name' => $this->configuration->getBlobTableName(),
+        ]));
 
         return (bool) $statement->fetchColumn();
     }
@@ -105,10 +108,38 @@ final class AttachmentBlobStore {
     }
 
     private function quotedBlobTableName(): string {
-        return $this->quotedIdentifier($this->configuration->getBlobTableName());
+        return $this->qualifiedIdentifier(
+            $this->configuration->getSchemaName(),
+            $this->configuration->getBlobTableName(),
+        );
     }
 
     private function quotedIdentifier(string $identifier): string {
         return '"' . str_replace('"', '""', $identifier) . '"';
+    }
+
+    private function qualifiedIdentifier(?string $schemaName, string $identifier): string {
+        if ($schemaName === null) {
+            return $this->quotedIdentifier($identifier);
+        }
+
+        return sprintf('%s.%s', $this->quotedIdentifier($schemaName), $this->quotedIdentifier($identifier));
+    }
+
+    private function configuredSchemaExpression(): string {
+        return $this->configuration->getSchemaName() === null ? 'current_schema()' : ':schema_name';
+    }
+
+    /** @param array<string, scalar|null> $parameters
+     * @return array<string, scalar|null>
+     */
+    private function schemaQueryParameters(array $parameters): array {
+        if ($this->configuration->getSchemaName() === null) {
+            return $parameters;
+        }
+
+        $parameters['schema_name'] = $this->configuration->getSchemaName();
+
+        return $parameters;
     }
 }

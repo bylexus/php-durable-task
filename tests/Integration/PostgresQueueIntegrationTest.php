@@ -87,6 +87,40 @@ final class PostgresQueueIntegrationTest extends TestCase
         }
     }
 
+    public function testEnqueueUsesConfiguredSchemaAndSchemaAwareNotificationChannel(): void {
+        $pdo = PostgresIntegrationConnection::requirePdo($this);
+        $listener = PostgresIntegrationConnection::requirePdo($this);
+        $tableName = PostgresIntegrationConnection::uniqueTableName();
+        $schemaName = PostgresIntegrationConnection::uniqueSchemaName();
+
+        try {
+            $configuration = new QueueConfiguration($tableName, $schemaName);
+            $schemaManager = new SchemaManager($pdo, $configuration);
+            $schemaManager->bootstrap();
+
+            $queue = new PostgresQueue($pdo, $configuration);
+            $listener->exec(sprintf('LISTEN "%s"', $queue->getNotificationChannel()));
+
+            $task = new QueueWorkflowTaskFixture();
+            $task->setPayload(['job' => 'schema-aware']);
+            $record = $task->enqueue($pdo, $configuration);
+
+            self::assertNotNull($record->taskId);
+            self::assertStringContainsString($schemaName, $queue->getNotificationChannel());
+
+            $notification = $this->fetchNotification($listener);
+
+            self::assertIsArray($notification);
+            self::assertSame($queue->getNotificationChannel(), $notification['message']);
+            self::assertEquals(
+                (object) ['job' => 'schema-aware'],
+                $this->fetchQueueRecord($pdo, $tableName, (int) $record->taskId, $schemaName)->payload,
+            );
+        } finally {
+            PostgresIntegrationConnection::dropSchemaIfExists($pdo, $schemaName);
+        }
+    }
+
     public function testClaimPrefersHigherPriorityTasks(): void {
         $pdo = PostgresIntegrationConnection::requirePdo($this);
         $tableName = PostgresIntegrationConnection::uniqueTableName();
@@ -502,9 +536,14 @@ final class PostgresQueueIntegrationTest extends TestCase
         return $row;
     }
 
-    private function fetchQueueRecord(\PDO $pdo, string $tableName, int $taskId): QueueRecord {
+    private function fetchQueueRecord(
+        \PDO $pdo,
+        string $tableName,
+        int $taskId,
+        ?string $schemaName = null,
+    ): QueueRecord {
         $statement = $pdo->prepare(
-            sprintf('SELECT * FROM "%s" WHERE task_id = :task_id', str_replace('"', '""', $tableName)),
+            sprintf('SELECT * FROM %s WHERE task_id = :task_id', $this->qualifiedIdentifier($schemaName, $tableName)),
         );
         $statement->execute(['task_id' => $taskId]);
         $row = $statement->fetch(\PDO::FETCH_ASSOC);
@@ -517,8 +556,8 @@ final class PostgresQueueIntegrationTest extends TestCase
     private function blobCountForTask(\PDO $pdo, QueueConfiguration $configuration, int $taskId): int {
         $statement = $pdo->prepare(
             sprintf(
-                'SELECT COUNT(*) FROM "%s" WHERE task_id = :task_id',
-                str_replace('"', '""', $configuration->getBlobTableName()),
+                'SELECT COUNT(*) FROM %s WHERE task_id = :task_id',
+                $this->qualifiedIdentifier($configuration->getSchemaName(), $configuration->getBlobTableName()),
             ),
         );
         $statement->execute(['task_id' => $taskId]);
@@ -571,5 +610,15 @@ final class PostgresQueueIntegrationTest extends TestCase
 
             throw $throwable;
         }
+    }
+
+    private function qualifiedIdentifier(?string $schemaName, string $identifier): string {
+        $quotedIdentifier = '"' . str_replace('"', '""', $identifier) . '"';
+
+        if ($schemaName === null) {
+            return $quotedIdentifier;
+        }
+
+        return sprintf('"%s".%s', str_replace('"', '""', $schemaName), $quotedIdentifier);
     }
 }
