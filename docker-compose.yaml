@@ -8,8 +8,8 @@ services:
         env_file:
             - .env.docker
         volumes:
-          - .:/src
-    db:
+            - .:/src
+    postgres:
         image: postgres:17
         ports:
             - "5432:5432"
@@ -19,7 +19,18 @@ services:
             - POSTGRES_USER=${TEST_DATABASE_USER:-postgres}
             - POSTGRES_DB=${TEST_DATABASE_NAME:-postgres}
         volumes:
-            - testdb:/var/lib/postgresql/data
+            - testdb-postgres:/var/lib/postgresql/data
+    mysql:
+        image: mysql:8.0-oracle
+        volumes:
+            - testdb-mysql:/var/lib/mysql
+        ports:
+            - "3306:3306"
+        environment:
+            MYSQL_ROOT_PASSWORD: ${TEST_DATABASE_PASSWORD:-}
+            MYSQL_DATABASE: ${TEST_DATABASE_NAME}
+            MYSQL_USER: ${TEST_DATABASE_USER:-mysql}
+            MYSQL_PASSWORD: ${TEST_DATABASE_PASSWORD:-}
     mail:
         image: axllent/mailpit
         ports:
@@ -27,4 +38,6 @@ services:
             - "1025:1025"
 
 volumes:
-    testdb: {}
+    testdb-postgres: {}
+    testdb-mysql: {}
+    testdb-mariadb: {}

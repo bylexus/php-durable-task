@@ -9,6 +9,8 @@ use ByLexus\TaskRunner\Enum\TaskStatus;
 use ByLexus\TaskRunner\Exception\ConfigurationException;
 use ByLexus\TaskRunner\PayloadNormalizer;
 use ByLexus\TaskRunner\Exception\QueueException;
+use ByLexus\TaskRunner\Queue\Db\DatabasePlatform;
+use ByLexus\TaskRunner\Queue\Db\DatabasePlatformResolver;
 use ByLexus\TaskRunner\Exception\SerializationException;
 use ByLexus\TaskRunner\Step;
 use ByLexus\TaskRunner\Task;
@@ -16,7 +18,7 @@ use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
 /**
- * Persists workflow records in PostgreSQL.
+ * Persists workflow records in the configured database.
  *
  * Implements queue storage operations for tasks, including inserts, updates, and record retrieval.
  *
@@ -24,7 +26,7 @@ use Psr\Log\NullLogger;
  *
  * (c) Alexander Schenkel <info@alexi.ch>
  */
-final class PostgresQueue {
+final class DatabaseQueue {
     private const MAX_NOTIFICATION_CHANNEL_LENGTH = 63;
     private const NOTIFICATION_CHANNEL_HASH_LENGTH = 12;
 
@@ -54,6 +56,7 @@ final class PostgresQueue {
 
     private \PDO $connection;
     private QueueConfiguration $configuration;
+    private DatabasePlatform $platform;
     private LoggerInterface $logger;
     private AttachmentBlobStore $attachmentBlobStore;
 
@@ -64,6 +67,8 @@ final class PostgresQueue {
     ) {
         $this->connection = $connection;
         $this->configuration = $configuration ?? new QueueConfiguration();
+        $this->platform = DatabasePlatformResolver::resolve($this->connection);
+        $this->platform->validateConfiguration($this->configuration);
         $this->logger = $logger ?? new NullLogger();
         $this->attachmentBlobStore = new AttachmentBlobStore($this->connection, $this->configuration);
     }
@@ -76,12 +81,16 @@ final class PostgresQueue {
         return $this->connection;
     }
 
+    public function getPlatform(): DatabasePlatform {
+        return $this->platform;
+    }
+
     public function get(int $taskId, bool $forUpdate = false): QueueRecord {
         $statement = $this->connection->prepare(
             sprintf(
                 'SELECT * FROM %s WHERE task_id = :task_id%s',
                 $this->quotedTableName(),
-                $forUpdate ? ' FOR UPDATE' : '',
+                $forUpdate && $this->platform->supportsForUpdate() ? ' FOR UPDATE' : '',
             ),
         );
         $statement->execute(['task_id' => $taskId]);
@@ -110,9 +119,8 @@ final class PostgresQueue {
         }
 
         try {
-            $statement = $this->connection->prepare(
-                sprintf(
-                    <<<'SQL'
+            if ($this->platform->supportsInsertReturning()) {
+                $insertSql = <<<'SQL'
 INSERT INTO %s (
     task_class,
     step_class,
@@ -164,7 +172,66 @@ VALUES (
     :updated_at
 )
 RETURNING *
-SQL,
+SQL
+                ;
+            } else {
+                $insertSql = <<<'SQL'
+INSERT INTO %s (
+    task_class,
+    step_class,
+    task_status,
+    priority,
+    task_created_at,
+    task_started_at,
+    task_finished_at,
+    cleanup_at,
+    step_status,
+    step_attempt,
+    step_started_at,
+    step_finished_at,
+    payload_json,
+    result_json,
+    error_json,
+    available_at,
+    claimed_at,
+    claimed_by,
+    last_error_code,
+    last_error_message,
+    cancel_requested,
+    cancel_reason,
+    updated_at
+)
+VALUES (
+    :task_class,
+    :step_class,
+    :task_status,
+    :priority,
+    :task_created_at,
+    :task_started_at,
+    :task_finished_at,
+    :cleanup_at,
+    :step_status,
+    :step_attempt,
+    :step_started_at,
+    :step_finished_at,
+    NULL,
+    :result_json,
+    :error_json,
+    :available_at,
+    :claimed_at,
+    :claimed_by,
+    :last_error_code,
+    :last_error_message,
+    FALSE,
+    :cancel_reason,
+    :updated_at
+)
+SQL;
+            }
+
+            $statement = $this->connection->prepare(
+                sprintf(
+                    $insertSql,
                     $this->quotedTableName(),
                 ),
             );
@@ -192,7 +259,12 @@ SQL,
                 'updated_at' => $this->formatDateTime($now),
             ]);
 
-            $record = $this->fetchRecordFromStatement($statement, 'Failed to read enqueued queue record.');
+            if ($this->platform->supportsInsertReturning()) {
+                $record = $this->fetchRecordFromStatement($statement, 'Failed to read enqueued queue record.');
+            } else {
+                $record = $this->loadInsertedRecord('Failed to read enqueued queue record.');
+            }
+
             $record = $this->update((int) $record->taskId, ['payload_json' => $task->getStoredPayload()], false);
             $this->emitNotification((string) $record->taskId);
 
@@ -234,30 +306,27 @@ SQL,
                 'runnerId' => $runnerId,
             ]);
 
-            throw new QueueException('PostgresQueue::claim() requires no active transaction.');
+            throw new QueueException('DatabaseQueue::claim() requires no active transaction.');
         }
 
         $this->connection->beginTransaction();
 
         try {
+            if (!$this->platform->supportsSkipLocked()) {
+                $claimedRecord = $this->claimWithoutSkipLocked($runnerId);
+
+                $this->connection->commit();
+
+                return $claimedRecord;
+            }
+
             $select = $this->connection->prepare(
-                sprintf(
-                    <<<'SQL'
-SELECT *
-FROM %s
-WHERE task_status = :task_status
-  AND step_status = :step_status
-  AND available_at <= CURRENT_TIMESTAMP
-ORDER BY priority ASC, available_at ASC, task_created_at ASC
-FOR UPDATE SKIP LOCKED
-LIMIT 1
-SQL,
-                    $this->quotedTableName(),
-                ),
+                $this->claimSelectSql(true),
             );
             $select->execute([
                 'task_status' => TaskStatus::QUEUED->value,
                 'step_status' => StepStatus::QUEUED->value,
+                'available_at' => $this->formatDateTime($this->currentTimestamp()),
             ]);
 
             $row = $select->fetch(\PDO::FETCH_ASSOC);
@@ -274,10 +343,8 @@ SQL,
 
             $record = QueueRecord::fromDatabaseRow($row);
             $now = $this->currentTimestamp();
-
-            $update = $this->connection->prepare(
-                sprintf(
-                    <<<'SQL'
+            if ($this->platform->supportsUpdateReturning()) {
+                $claimUpdateSql = <<<'SQL'
 UPDATE %s
 SET task_status = :task_status,
     step_status = :step_status,
@@ -288,7 +355,24 @@ SET task_status = :task_status,
     updated_at = :updated_at
 WHERE task_id = :task_id
 RETURNING *
-SQL,
+SQL;
+            } else {
+                $claimUpdateSql = <<<'SQL'
+UPDATE %s
+SET task_status = :task_status,
+    step_status = :step_status,
+    claimed_at = :claimed_at,
+    claimed_by = :claimed_by,
+    task_started_at = COALESCE(task_started_at, :task_started_at),
+    step_started_at = COALESCE(step_started_at, :step_started_at),
+    updated_at = :updated_at
+WHERE task_id = :task_id
+SQL;
+            }
+
+            $update = $this->connection->prepare(
+                sprintf(
+                    $claimUpdateSql,
                     $this->quotedTableName(),
                 ),
             );
@@ -303,7 +387,11 @@ SQL,
                 'task_id' => $record->taskId,
             ]);
 
-            $claimedRecord = $this->fetchRecordFromStatement($update, 'Failed to read claimed queue record.');
+            if ($this->platform->supportsUpdateReturning()) {
+                $claimedRecord = $this->fetchRecordFromStatement($update, 'Failed to read claimed queue record.');
+            } else {
+                $claimedRecord = $this->get((int) $record->taskId, false);
+            }
 
             $this->connection->commit();
 
@@ -347,13 +435,7 @@ SQL,
             throw new ConfigurationException('Queue update requires at least one changed column.');
         }
 
-        if (!$this->connection->inTransaction()) {
-            $this->logger->error('Queue update called without active transaction.', [
-                'taskId' => $taskId,
-            ]);
-
-            throw new QueueException('PostgresQueue::update() requires an active transaction.');
-        }
+        $this->requireActiveTransaction('DatabaseQueue::update()', ['taskId' => $taskId]);
 
         $this->logger->info('Queue update started.', [
             'taskId' => $taskId,
@@ -383,16 +465,22 @@ SQL,
 
         $statement = $this->connection->prepare(
             sprintf(
-                'UPDATE %s SET %s WHERE task_id = :task_id RETURNING *',
+                $this->platform->supportsUpdateReturning()
+                    ? 'UPDATE %s SET %s WHERE task_id = :task_id RETURNING *'
+                    : 'UPDATE %s SET %s WHERE task_id = :task_id',
                 $this->quotedTableName(),
                 implode(', ', $assignments),
             ),
         );
         $statement->execute($parameters);
-        $record = $this->fetchRecordFromStatement(
-            $statement,
-            sprintf('Queue row %d could not be updated.', $taskId),
-        );
+        if ($this->platform->supportsUpdateReturning()) {
+            $record = $this->fetchRecordFromStatement(
+                $statement,
+                sprintf('Queue row %d could not be updated.', $taskId),
+            );
+        } else {
+            $record = $this->get($taskId, false);
+        }
 
         if ($notify) {
             $this->emitNotification((string) $taskId);
@@ -415,13 +503,14 @@ SQL,
             sprintf(
                 <<<'SQL'
 DELETE FROM %s
-WHERE cleanup_at <= CURRENT_TIMESTAMP
+WHERE cleanup_at <= :cleanup_before
   AND task_status IN (:succeeded_status, :failed_status, :cancelled_status)
 SQL,
                 $this->quotedTableName(),
             ),
         );
         $statement->execute([
+            'cleanup_before' => $this->formatDateTime($this->currentTimestamp()),
             'succeeded_status' => TaskStatus::SUCCEEDED->value,
             'failed_status' => TaskStatus::FAILED->value,
             'cancelled_status' => TaskStatus::CANCELLED->value,
@@ -436,6 +525,27 @@ SQL,
         }
 
         return $deletedRows;
+    }
+
+    /**
+     * @return list<QueueRecord>
+     */
+    public function findStartedRunningTasks(): array {
+        return $this->selectRunningTasks("\n  AND step_started_at IS NOT NULL", [
+            'task_status' => TaskStatus::RUNNING->value,
+            'step_status' => StepStatus::RUNNING->value,
+        ]);
+    }
+
+    /**
+     * @return list<QueueRecord>
+     */
+    public function findClaimedRunningTasks(string $runnerId): array {
+        return $this->selectRunningTasks("\n  AND claimed_by = :claimed_by", [
+            'task_status' => TaskStatus::RUNNING->value,
+            'step_status' => StepStatus::RUNNING->value,
+            'claimed_by' => $runnerId,
+        ]);
     }
 
     public function getNotificationChannel(): string {
@@ -466,6 +576,10 @@ SQL,
     }
 
     private function emitNotification(string $payload = ''): void {
+        if (!$this->platform->supportsNotifications()) {
+            return;
+        }
+
         $statement = $this->connection->prepare('SELECT pg_notify(:channel, :payload)');
         $statement->execute([
             'channel' => $this->getNotificationChannel(),
@@ -479,24 +593,61 @@ SQL,
     }
 
     private function fetchRecordFromStatement(\PDOStatement $statement, string $errorMessage): QueueRecord {
-        $row = $statement->fetch(\PDO::FETCH_ASSOC);
+        try {
+            $row = $statement->fetch(\PDO::FETCH_ASSOC);
 
-        if (!is_array($row)) {
-            $this->logger->error('Queue record fetch failed.', [
-                'message' => $errorMessage,
-            ]);
+            if (!is_array($row)) {
+                $this->logger->error('Queue record fetch failed.', [
+                    'message' => $errorMessage,
+                ]);
 
-            throw new QueueException($errorMessage);
+                throw new QueueException($errorMessage);
+            }
+
+            return QueueRecord::fromDatabaseRow($row);
+        } finally {
+            $statement->closeCursor();
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $parameters
+     *
+     * @return list<QueueRecord>
+     */
+    private function selectRunningTasks(string $additionalWhere, array $parameters): array {
+        $this->requireActiveTransaction('DatabaseQueue::selectRunningTasks()');
+
+        $statement = $this->connection->prepare(
+            $this->runningTaskSelectSql($additionalWhere),
+        );
+        $statement->execute($parameters);
+
+        try {
+            $rows = $statement->fetchAll(\PDO::FETCH_ASSOC);
+        } finally {
+            $statement->closeCursor();
         }
 
-        return QueueRecord::fromDatabaseRow($row);
+        $records = [];
+
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+
+            $records[] = QueueRecord::fromDatabaseRow($row);
+        }
+
+        return $records;
     }
 
     private function lockRecord(int $taskId): QueueRecord {
         $statement = $this->connection->prepare(
             sprintf(
-                'SELECT * FROM %s WHERE task_id = :task_id FOR UPDATE',
+                'SELECT * FROM %s WHERE task_id = :task_id%s',
                 $this->quotedTableName(),
+                $this->platform->supportsForUpdate() ? ' FOR UPDATE' : '',
             ),
         );
         $statement->execute(['task_id' => $taskId]);
@@ -554,25 +705,175 @@ SQL,
     }
 
     private function quotedTableName(): string {
-        return $this->qualifiedIdentifier(
+        return $this->platform->qualifyIdentifier(
             $this->configuration->getSchemaName(),
             $this->configuration->getTableName(),
         );
     }
 
-    private function quotedIdentifier(string $identifier): string {
-        return '"' . str_replace('"', '""', $identifier) . '"';
-    }
-
-    private function qualifiedIdentifier(?string $schemaName, string $identifier): string {
-        if ($schemaName === null) {
-            return $this->quotedIdentifier($identifier);
-        }
-
-        return sprintf('%s.%s', $this->quotedIdentifier($schemaName), $this->quotedIdentifier($identifier));
-    }
-
     private function sanitizeIdentifierPart(string $identifier): ?string {
         return preg_replace('/[^a-zA-Z0-9_]+/', '_', $identifier);
+    }
+
+    private function loadInsertedRecord(string $errorMessage): QueueRecord {
+        $taskId = $this->lastInsertedId();
+
+        if ($taskId === null) {
+            throw new QueueException($errorMessage);
+        }
+
+        return $this->get($taskId, false);
+    }
+
+    private function lastInsertedId(): ?int {
+        $value = $this->connection->lastInsertId();
+
+        if ($value === false || $value === '0' || $value === '') {
+            return null;
+        }
+
+        return (int) $value;
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
+    private function requireActiveTransaction(string $operation, array $context = []): void {
+        if ($this->connection->inTransaction()) {
+            return;
+        }
+
+        $this->logger->error('Queue operation called without active transaction.', [
+            'operation' => $operation,
+            ...$context,
+        ]);
+
+        throw new QueueException(sprintf('%s requires an active transaction.', $operation));
+    }
+
+    private function claimSelectSql(bool $withSkipLocked): string {
+        $lockingClause = '';
+
+        if ($withSkipLocked && $this->platform->supportsSkipLocked()) {
+            $lockingClause = "\nFOR UPDATE SKIP LOCKED";
+        }
+
+        return sprintf(
+            <<<'SQL'
+SELECT *
+FROM %s
+WHERE task_status = :task_status
+  AND step_status = :step_status
+  AND available_at <= :available_at
+ORDER BY priority ASC, available_at ASC, task_created_at ASC
+LIMIT 1%s
+SQL,
+            $this->quotedTableName(),
+            $lockingClause,
+        );
+    }
+
+    private function runningTaskSelectSql(string $additionalWhere = ''): string {
+        $lockingClause = $this->runningTaskLockingClause();
+
+        return sprintf(
+            <<<'SQL'
+SELECT *
+FROM %s
+WHERE task_status = :task_status
+  AND step_status = :step_status%s%s
+SQL,
+            $this->quotedTableName(),
+            $additionalWhere,
+            $lockingClause === '' ? '' : "\n{$lockingClause}",
+        );
+    }
+
+    private function runningTaskLockingClause(): string {
+        if ($this->platform->supportsSkipLocked()) {
+            return 'FOR UPDATE SKIP LOCKED';
+        }
+
+        if ($this->platform->supportsForUpdate()) {
+            return 'FOR UPDATE';
+        }
+
+        return '';
+    }
+
+    private function claimWithoutSkipLocked(string $runnerId): ?QueueRecord {
+        while (true) {
+            $select = $this->connection->prepare(
+                $this->claimSelectSql(false),
+            );
+            $select->execute([
+                'task_status' => TaskStatus::QUEUED->value,
+                'step_status' => StepStatus::QUEUED->value,
+                'available_at' => $this->formatDateTime($this->currentTimestamp()),
+            ]);
+
+            $row = $select->fetch(\PDO::FETCH_ASSOC);
+
+            if (!is_array($row)) {
+                $this->logger->debug('Queue claim found no available task.', [
+                    'runnerId' => $runnerId,
+                ]);
+
+                return null;
+            }
+
+            $record = QueueRecord::fromDatabaseRow($row);
+            $now = $this->currentTimestamp();
+            $update = $this->connection->prepare(
+                sprintf(
+                    <<<'SQL'
+UPDATE %s
+SET task_status = :task_status,
+    step_status = :step_status,
+    claimed_at = :claimed_at,
+    claimed_by = :claimed_by,
+    task_started_at = COALESCE(task_started_at, :task_started_at),
+    step_started_at = COALESCE(step_started_at, :step_started_at),
+    updated_at = :updated_at
+WHERE task_id = :task_id
+  AND task_status = :expected_task_status
+  AND step_status = :expected_step_status
+SQL,
+                    $this->quotedTableName(),
+                ),
+            );
+            $update->execute([
+                'task_status' => TaskStatus::RUNNING->value,
+                'step_status' => StepStatus::RUNNING->value,
+                'claimed_at' => $this->formatDateTime($now),
+                'claimed_by' => $runnerId,
+                'task_started_at' => $this->formatDateTime($now),
+                'step_started_at' => $this->formatDateTime($now),
+                'updated_at' => $this->formatDateTime($now),
+                'task_id' => $record->taskId,
+                'expected_task_status' => TaskStatus::QUEUED->value,
+                'expected_step_status' => StepStatus::QUEUED->value,
+            ]);
+
+            if ($update->rowCount() !== 1) {
+                continue;
+            }
+
+            $claimedRecord = $this->get((int) $record->taskId, false);
+
+            $this->logger->info('Queue claim succeeded.', [
+                'runnerId' => $runnerId,
+                'taskId' => $claimedRecord->taskId,
+                'taskClass' => $claimedRecord->taskClass,
+                'stepClass' => $claimedRecord->stepClass,
+                'priority' => $claimedRecord->priority,
+                'taskStatus' => $claimedRecord->taskStatus,
+                'stepStatus' => $claimedRecord->stepStatus,
+                'claimedAt' => $claimedRecord->claimedAt?->format(DATE_ATOM),
+                'claimedBy' => $claimedRecord->claimedBy,
+            ]);
+
+            return $claimedRecord;
+        }
     }
 }

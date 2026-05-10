@@ -7,7 +7,7 @@ namespace ByLexus\TaskRunner\Tests;
 use ByLexus\TaskRunner\Enum\RetryMode;
 use ByLexus\TaskRunner\Enum\StepStatus;
 use ByLexus\TaskRunner\Metadata\TaskMetadata;
-use ByLexus\TaskRunner\Queue\PostgresQueue;
+use ByLexus\TaskRunner\Queue\DatabaseQueue;
 use ByLexus\TaskRunner\Queue\QueueRecord;
 use ByLexus\TaskRunner\Result\ErrorInfo;
 use ByLexus\TaskRunner\Result\StepResult;

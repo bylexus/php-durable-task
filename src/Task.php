@@ -10,7 +10,7 @@ use ByLexus\TaskRunner\Enum\TaskStatus;
 use ByLexus\TaskRunner\Exception\ConfigurationException;
 use ByLexus\TaskRunner\Metadata\MetadataResolver;
 use ByLexus\TaskRunner\Queue\AttachmentBlobStore;
-use ByLexus\TaskRunner\Queue\PostgresQueue;
+use ByLexus\TaskRunner\Queue\DatabaseQueue;
 use ByLexus\TaskRunner\Queue\QueueConfiguration;
 use ByLexus\TaskRunner\Queue\QueueRecord;
 use ByLexus\TaskRunner\Result\StepResult;
@@ -49,7 +49,7 @@ abstract class Task {
     private bool $cancelRequested = false;
     private ?string $cancelReason = null;
     private ?Step $actualStep = null;
-    private ?PostgresQueue $queue = null;
+    private ?DatabaseQueue $queue = null;
 
     public function __construct(?LoggerInterface $logger = null) {
         if ($logger !== null) {
@@ -229,7 +229,7 @@ abstract class Task {
             'stepClass' => $firstStep::class,
         ]);
 
-        $queue = new PostgresQueue($connection, $configuration, $this->baseLogger);
+        $queue = new DatabaseQueue($connection, $configuration, $this->baseLogger);
         $record = $queue->enqueue($this, $firstStep, $priority);
 
         $firstStep->hydrateFromQueueRecord($record);
@@ -255,7 +255,7 @@ abstract class Task {
         ?ContainerInterface $container = null,
         ?LoggerInterface $logger = null,
         ?AttachmentBlobStore $attachmentBlobStore = null,
-        ?PostgresQueue $queue = null,
+        ?DatabaseQueue $queue = null,
     ): self {
         $task = ClassInstantiator::instantiate($record->taskClass, self::class, self::class, $container, $logger);
 
@@ -275,7 +275,7 @@ abstract class Task {
         QueueRecord $record,
         ?Step $actualStep = null,
         ?AttachmentBlobStore $attachmentBlobStore = null,
-        ?PostgresQueue $queue = null,
+        ?DatabaseQueue $queue = null,
     ): void {
         $this->id = $record->taskId;
         $this->status = TaskStatus::from($record->taskStatus);

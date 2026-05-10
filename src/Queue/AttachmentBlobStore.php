@@ -6,6 +6,8 @@ namespace ByLexus\TaskRunner\Queue;
 
 use ByLexus\TaskRunner\Exception\ConfigurationException;
 use ByLexus\TaskRunner\Exception\QueueException;
+use ByLexus\TaskRunner\Queue\Db\DatabasePlatform;
+use ByLexus\TaskRunner\Queue\Db\DatabasePlatformResolver;
 use ByLexus\TaskRunner\Exception\SerializationException;
 use PDO;
 
@@ -21,6 +23,7 @@ use PDO;
 final class AttachmentBlobStore {
     private PDO $connection;
     private QueueConfiguration $configuration;
+    private DatabasePlatform $platform;
 
     public function __construct(
         PDO $connection,
@@ -28,14 +31,19 @@ final class AttachmentBlobStore {
     ) {
         $this->connection = $connection;
         $this->configuration = $configuration ?? new QueueConfiguration();
+        $this->platform = DatabasePlatformResolver::resolve($this->connection);
+        $this->platform->validateConfiguration($this->configuration);
     }
 
     public function store(int $taskId, string $content, int $sizeBytes, string $sha256): int {
         $statement = $this->connection->prepare(
             sprintf(
-                'INSERT INTO %s (task_id, content, size_bytes, sha256, created_at)
+                $this->platform->supportsInsertReturning()
+                    ? 'INSERT INTO %s (task_id, content, size_bytes, sha256, created_at)
                  VALUES (:task_id, :content, :size_bytes, :sha256, :created_at)
-                 RETURNING blob_id',
+                 RETURNING blob_id'
+                    : 'INSERT INTO %s (task_id, content, size_bytes, sha256, created_at)
+                 VALUES (:task_id, :content, :size_bytes, :sha256, :created_at)',
                 $this->quotedBlobTableName(),
             ),
         );
@@ -46,7 +54,11 @@ final class AttachmentBlobStore {
         $statement->bindValue('created_at', $this->currentTimestamp()->format('Y-m-d H:i:sP'), PDO::PARAM_STR);
         $statement->execute();
 
-        $blobId = $statement->fetchColumn();
+        if ($this->platform->supportsInsertReturning()) {
+            $blobId = $statement->fetchColumn();
+        } else {
+            $blobId = $this->connection->lastInsertId();
+        }
 
         if ($blobId === false) {
             throw new SerializationException('Failed to store attachment blob.');
@@ -88,20 +100,11 @@ final class AttachmentBlobStore {
     }
 
     public function tableExists(): bool {
-        $statement = $this->connection->prepare(sprintf(
-            'SELECT EXISTS (
-                SELECT 1
-                FROM information_schema.tables
-                WHERE table_schema = %s
-                  AND table_name = :table_name
-            )',
-            $this->configuredSchemaExpression(),
-        ));
-        $statement->execute($this->schemaQueryParameters([
-            'table_name' => $this->configuration->getBlobTableName(),
-        ]));
-
-        return (bool) $statement->fetchColumn();
+        return $this->platform->tableExists(
+            $this->connection,
+            $this->configuration,
+            $this->configuration->getBlobTableName(),
+        );
     }
 
     private function currentTimestamp(): \DateTimeImmutable {
@@ -109,38 +112,9 @@ final class AttachmentBlobStore {
     }
 
     private function quotedBlobTableName(): string {
-        return $this->qualifiedIdentifier(
+        return $this->platform->qualifyIdentifier(
             $this->configuration->getSchemaName(),
             $this->configuration->getBlobTableName(),
         );
-    }
-
-    private function quotedIdentifier(string $identifier): string {
-        return '"' . str_replace('"', '""', $identifier) . '"';
-    }
-
-    private function qualifiedIdentifier(?string $schemaName, string $identifier): string {
-        if ($schemaName === null) {
-            return $this->quotedIdentifier($identifier);
-        }
-
-        return sprintf('%s.%s', $this->quotedIdentifier($schemaName), $this->quotedIdentifier($identifier));
-    }
-
-    private function configuredSchemaExpression(): string {
-        return $this->configuration->getSchemaName() === null ? 'current_schema()' : ':schema_name';
-    }
-
-    /** @param array<string, scalar|null> $parameters
-     * @return array<string, scalar|null>
-     */
-    private function schemaQueryParameters(array $parameters): array {
-        if ($this->configuration->getSchemaName() === null) {
-            return $parameters;
-        }
-
-        $parameters['schema_name'] = $this->configuration->getSchemaName();
-
-        return $parameters;
     }
 }

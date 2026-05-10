@@ -2,7 +2,7 @@
 
 ⚠️ Work in progress! Use with caution for now! ⚠️
 
-PHP Task Runner is a PostgreSQL-backed workflow library for PHP >= 8.3. It is meant to queue and run jobs that are to be processed in the background of a frontend application (e.g. queue an email to be sent in the background).
+PHP Task Runner is a database-backed workflow library for PHP >= 8.3. It is meant to queue and run jobs that are to be processed in the background of a frontend application (e.g. queue an email to be sent in the background).
 
 You model work as a `Task` that defines a workflow consisting of `Step`s. Enqueued Tasks then get worked on step-by-step by a Runner. The library stores the Tasks and Steps state in the database so multiple runner processes can safely compete for queued work.
 
@@ -20,7 +20,11 @@ This README is written for experienced PHP developers who want to integrate the 
 
 - PHP 8.3+
 - `ext-pdo`
-- PostgreSQL via PDO
+- One of the supported PDO backends:
+    - PostgreSQL
+    - MySQL
+    - MariaDB
+    - SQLite
 - Autoloadable task and step classes in every process that enqueues or runs work
 
 ## Installation
@@ -50,15 +54,24 @@ Create the DB objects (1 table, some indexes), either by invoking the SchemaMana
 
 use ByLexus\TaskRunner\Queue\SchemaManager;
 
-// Use the Schema Manager with your existing PostgreSQL PDO connection:
+// Use the Schema Manager with your existing PDO connection:
 (new SchemaManager($pdo))->bootstrap();
 ```
 
-or by dumping the needed SQLs:
+or by exporting the needed SQL through your own tooling:
 
-```sh
-# Just dump the needed SQLs:
-$ php vendor/bylexus/php-tr/bin/dump-schema.php
+```php
+use ByLexus\TaskRunner\Queue\QueueConfiguration;
+use ByLexus\TaskRunner\Queue\SchemaManager;
+
+$schemaManager = new SchemaManager(
+    $pdo,
+    new QueueConfiguration('app_background_jobs', 'background_jobs'),
+);
+
+$ddl = $schemaManager->exportDdl();
+
+// Dump, log, or feed $ddl into your migration tooling.
 ```
 
 ### Create a Step class
@@ -174,7 +187,7 @@ use ByLexus\TaskRunner\RunnerConfiguration;
 
 // A runner claims one queued row, hydrates the task and step, executes them, and persists the result.
 $runner = new Runner(
-    connection: $pdo, // a Postgresql PDO connection object
+    connection: $pdo, // a PDO connection object for PostgreSQL, MySQL, MariaDB, or SQLite
     runnerConfiguration: new RunnerConfiguration(),
 );
 
@@ -246,7 +259,7 @@ Use:
 - `runSingle()` for cron-style polling, tests, or one-shot commands
 - `runLoop()` for a long-running worker process, waiting for new tasks
 
-`runLoop()` listens for PostgreSQL notifications when the PDO driver supports them and otherwise falls back to sleeping for the configured wait timeout.
+`runLoop()` uses PostgreSQL `LISTEN` / `NOTIFY` only when the active PDO connection supports it. MySQL, MariaDB, and SQLite use the polling variant only and sleep for the configured wait timeout between claim attempts when no task is available.
 
 You can safely start multiple runners, as each task can only be claimed by one runner at a time: This allows for parallel execution of multiple tasks. Useful if your runner gets blocked with long-running tasks.
 
@@ -348,7 +361,7 @@ final class SendMailStep extends Step {
 
 ## Schema Management
 
-The queue uses one PostgreSQL table plus indexes. You have three supported ways to manage it.
+The queue uses one database table plus indexes. You have three supported ways to manage it.
 
 ### 1. Explicit bootstrap in your application
 
@@ -377,15 +390,21 @@ This is the most predictable option in production. It creates the queue table if
 
 The queue schema includes a `priority` column with default value `3`, so existing producers can keep enqueueing tasks without passing a priority explicitly.
 
-### 2. Export the DDL and run it through your own migration system
+### 2. Export the DDL through your own configured tooling
 
-```bash
-php bin/dump-schema.php
-php bin/dump-schema.php custom_queue_table
-php bin/dump-schema.php custom_queue_table background_jobs
+```php
+use ByLexus\TaskRunner\Queue\QueueConfiguration;
+use ByLexus\TaskRunner\Queue\SchemaManager;
+
+$schemaManager = new SchemaManager(
+    $pdo,
+    new QueueConfiguration('custom_queue_table', 'background_jobs'),
+);
+
+$ddl = $schemaManager->exportDdl();
 ```
 
-This prints the exact `CREATE TABLE` and `CREATE INDEX` statements for the configured queue table.
+This returns the exact DDL string for the configured queue table and backend resolved from your live PDO connection. The library does not ship a standalone dump script anymore; wiring the export into your migration or deployment tooling is your responsibility.
 
 ### 3. Let the runner bootstrap once at startup
 
@@ -403,7 +422,7 @@ This is useful for local development or controlled deployments. It is optional a
 
 ### Custom queue tables and schemas
 
-Use `QueueConfiguration` when you want more than one queue table, need a non-default name, or want to place queue objects in a dedicated PostgreSQL schema.
+Use `QueueConfiguration` when you want more than one queue table, need a non-default name, or want to place queue objects in a dedicated namespace.
 
 ```php
 use ByLexus\TaskRunner\Queue\QueueConfiguration;
@@ -426,15 +445,19 @@ $queue->createRunner($runnerConfiguration)->runLoop();
 
 The same `QueueConfiguration` must be used consistently by producers, runners, and schema bootstrap.
 
-`QueueContext` is the simplest way to enforce that consistency in application code because it also exposes `createSchemaManager()`, `bootstrapSchema()`, `validateSchema()`, `tableExists()`, `blobTableExists()`, and `exportDdl()` on the same shared queue context.
+`QueueContext` is the simplest way to enforce that consistency in application code because it also exposes `createSchemaManager()`, `bootstrapSchema()`, `validateSchema()`, `tableExists()`, `blobTableExists()`, and `exportDdl()` on the same shared queue context backed by the configured PDO connection.
 
-To place the queue in a specific schema, pass the schema name as the second argument:
+To place the queue in a specific namespace, pass the schema name as the second argument:
 
 ```php
 $queueConfiguration = new QueueConfiguration('app_background_jobs', 'background_jobs');
 ```
 
-Schema bootstrap will create the schema automatically when needed.
+Backend-specific behavior:
+
+- PostgreSQL: the second argument is a schema name, and schema bootstrap creates it automatically when needed.
+- MySQL / MariaDB: the second argument is used as the database/catalog name qualifier. It must already exist; bootstrap does not create it.
+- SQLite: schema names are not supported.
 
 ## Running Workers
 
@@ -463,7 +486,7 @@ $runner = new Runner(
 $runner->runLoop();
 ```
 
-Run multiple worker processes when you want parallel execution. The queue uses PostgreSQL row locking so different runner processes do not claim the same task row at the same time.
+Run multiple worker processes when you want parallel execution. The queue uses backend-specific claim and locking behavior so different runner processes do not claim the same task row at the same time.
 
 ## Constructor Service Injection And Framework Integration
 
@@ -620,7 +643,9 @@ This example shows:
 
 ## Operational Notes
 
-- PostgreSQL is the queue backend. There is no abstraction for other databases yet.
+- Supported queue backends are PostgreSQL, MySQL, MariaDB, and SQLite via PDO.
+- PostgreSQL is the only backend that supports `LISTEN` / `NOTIFY` wakeups for `runLoop()`.
+- MySQL, MariaDB, and SQLite use polling only for worker wakeups.
 - Task and step classes are re-instantiated from the class names stored in the queue row, so workers must have the same code and autoload configuration as producers.
 - Tasks / Steps are restartable (e.g. retry after failure), but idempotency is still your responsibility. If a step talks to an external system, design it so retries or restarts do not create incorrect side effects.
 - `runLoop()` is a worker process, not a scheduler. You still decide how your application starts and supervises workers.
@@ -631,7 +656,7 @@ This example shows:
 This library is a good fit when you want:
 
 - background workflows inside an existing PHP application
-- multi-step jobs whose state should live in PostgreSQL
+- multi-step jobs whose state should live in a relational database already available to your application
 - explicit code-level workflow definitions instead of a generic queue payload protocol
 - direct integration with your framework container and logger
 

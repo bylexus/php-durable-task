@@ -83,7 +83,7 @@ src/           <--- Namespace root
     MetadataResolver.php
   Queue/
     QueueRecord.php
-    PostgresQueue.php
+    DatabaseQueue.php
     SchemaManager.php
     NotificationChannel.php
   Result/
@@ -194,7 +194,7 @@ Logging ownership:
 
 - `Task` and `Step` log domain-level lifecycle and business-level context.
 - `Runner` logs orchestration-level decisions, execution start and end, retry handling, cancellation handling, timeout handling, and exception paths.
-- `PostgresQueue` logs queue-level state changes and notification activity.
+- `DatabaseQueue` logs queue-level state changes and notification activity.
 - `NullLogger` remains the default fallback only; users may still inject any PSR-3 compatible logger.
 
 Recommended log context fields:
@@ -220,7 +220,7 @@ Affected implementation areas:
 - `src/Step.php`: add logger storage, constructor, accessors, and step lifecycle log points.
 - `src/RunnerConfiguration.php`: add logger support.
 - `src/Runner.php`: resolve the active logger, default it to `NullLogger`, propagate it to reconstructed tasks and steps, and log orchestration transitions and exceptions.
-- `src/Queue/PostgresQueue.php`: accept or resolve the active logger for queue operation logging.
+- `src/Queue/DatabaseQueue.php`: accept or resolve the active logger for queue operation logging.
 - Tests under `tests/`: add coverage for logger propagation, `NullLogger` fallback resolution, and required log emission points.
 
 Recommended implementation sequence:
@@ -260,9 +260,9 @@ Concrete code areas that must change:
   Change the execution call from `$step->execute()` to `$step->execute($task)`. Remove timeout/cancellation/failure branches that read payload from the step object. All persistence branches should use the task payload as the authoritative state after execution.
 - `src/Result/StepResult.php`
   Remove payload state from `StepResult` entirely so it carries only outcome and diagnostics.
-- `src/Queue/PostgresQueue.php` and `src/Queue/QueueRecord.php`
+- `src/Queue/DatabaseQueue.php` and `src/Queue/QueueRecord.php`
   Storage remains task-level and can continue to use `payload_json`, but step hydration should no longer imply that the step owns a payload copy.
-- `tests/TaskTest.php`, `tests/ResultTest.php`, `tests/Integration/PostgresQueueIntegrationTest.php`, and `tests/Integration/RunnerIntegrationTest.php`
+- `tests/TaskTest.php`, `tests/ResultTest.php`, `tests/Integration/DatabaseQueueIntegrationTest.php`, and `tests/Integration/RunnerIntegrationTest.php`
   Rewrite assertions that currently inspect payload through `actualStep()` and replace them with task-owned payload assertions plus execute-signature coverage.
 - Step fixtures under `tests/Fixture/` and example steps under `examples/`
   Update every concrete step implementation to the new `execute(Task $task)` signature and replace `$this->getPayload()` usage with `$task->getPayload()`.
@@ -312,8 +312,8 @@ Affected implementation areas for this refinement:
 - `src/Step.php`: remove step-owned payload access and switch execution to task-mediated payload access.
 - `src/Result/StepResult.php`: remove payload handling entirely and keep only status plus diagnostics.
 - `src/Runner.php`: preserve one task-owned payload object across execution, exception handling, retry requeueing, and next-step transitions.
-- `src/Queue/QueueRecord.php` and `src/Queue/PostgresQueue.php`: keep storage compatible with nullable JSON, but ensure hydration and persistence work with the new in-memory object contract and legacy payload shapes.
-- `tests/TaskTest.php`, `tests/ResultTest.php`, `tests/Integration/PostgresQueueIntegrationTest.php`, and `tests/Integration/RunnerIntegrationTest.php`: expand coverage from shape equality to task-owned payload identity, lazy materialization, and persistence of nested mutations.
+- `src/Queue/QueueRecord.php` and `src/Queue/DatabaseQueue.php`: keep storage compatible with nullable JSON, but ensure hydration and persistence work with the new in-memory object contract and legacy payload shapes.
+- `tests/TaskTest.php`, `tests/ResultTest.php`, `tests/Integration/DatabaseQueueIntegrationTest.php`, and `tests/Integration/RunnerIntegrationTest.php`: expand coverage from shape equality to task-owned payload identity, lazy materialization, and persistence of nested mutations.
 - Payload-related fixtures and examples such as `tests/Fixture/RunnerRetryStepFixture.php`, `tests/Fixture/PayloadOverrideTaskFixture.php`, and the Chuck Norris example files: replace step-local payload access with task-mediated payload access.
 
 ### StepResult
@@ -558,7 +558,7 @@ Cancelled flow:
 
 ## Queue Layer Design
 
-`PostgresQueue` should be the only component that reads or writes the queue table.
+`DatabaseQueue` should be the only component that reads or writes the queue table.
 
 Responsibilities:
 
@@ -603,7 +603,7 @@ Runner behavior:
 
 ### Cleanup Execution
 
-- `PostgresQueue` should expose a method that deletes rows where `cleanup_at <= now()`.
+- `DatabaseQueue` should expose a method that deletes rows where `cleanup_at <= now()`.
 - Runner loop mode should call this cleanup method on a low-frequency cadence so retention cleanup happens automatically.
 - Single mode may perform one cleanup pass before exit.
 - Cleanup must only delete terminal task rows and must never touch queued or running work.

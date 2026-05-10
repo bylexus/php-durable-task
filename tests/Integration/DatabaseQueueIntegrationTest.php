@@ -9,7 +9,7 @@ use ByLexus\TaskRunner\Enum\TaskStatus;
 use ByLexus\TaskRunner\FileAttachment;
 use ByLexus\TaskRunner\Exception\QueueException;
 use ByLexus\TaskRunner\Queue\AttachmentBlobStore;
-use ByLexus\TaskRunner\Queue\PostgresQueue;
+use ByLexus\TaskRunner\Queue\DatabaseQueue;
 use ByLexus\TaskRunner\Queue\QueueConfiguration;
 use ByLexus\TaskRunner\Queue\QueueRecord;
 use ByLexus\TaskRunner\Queue\SchemaManager;
@@ -18,7 +18,7 @@ use ByLexus\TaskRunner\Tests\Fixture\QueueWorkflowTaskFixture;
 use ByLexus\TaskRunner\Tests\Support\PostgresIntegrationConnection;
 use PHPUnit\Framework\TestCase;
 
-final class PostgresQueueIntegrationTest extends TestCase
+final class DatabaseQueueIntegrationTest extends TestCase
 {
     public function testEnqueueCreatesQueuedRecordAndEmitsNotification(): void {
         $pdo = PostgresIntegrationConnection::requirePdo($this);
@@ -30,7 +30,7 @@ final class PostgresQueueIntegrationTest extends TestCase
             $schemaManager = new SchemaManager($pdo, $configuration);
             $schemaManager->bootstrap();
 
-            $queue = new PostgresQueue($pdo, $configuration);
+            $queue = new DatabaseQueue($pdo, $configuration);
             $listener->exec(sprintf('LISTEN "%s"', $queue->getNotificationChannel()));
 
             $task = new QueueWorkflowTaskFixture();
@@ -66,8 +66,8 @@ final class PostgresQueueIntegrationTest extends TestCase
             $task->setPayload(['job' => 'beta']);
             $task->enqueue($pdo, configuration: $configuration);
 
-            $firstQueue = new PostgresQueue($pdo, $configuration);
-            $secondQueue = new PostgresQueue($otherPdo, $configuration);
+            $firstQueue = new DatabaseQueue($pdo, $configuration);
+            $secondQueue = new DatabaseQueue($otherPdo, $configuration);
 
             $claimed = $firstQueue->claim('runner-1');
             $secondClaim = $secondQueue->claim('runner-2');
@@ -98,7 +98,7 @@ final class PostgresQueueIntegrationTest extends TestCase
             $schemaManager = new SchemaManager($pdo, $configuration);
             $schemaManager->bootstrap();
 
-            $queue = new PostgresQueue($pdo, $configuration);
+            $queue = new DatabaseQueue($pdo, $configuration);
             $listener->exec(sprintf('LISTEN "%s"', $queue->getNotificationChannel()));
 
             $task = new QueueWorkflowTaskFixture();
@@ -138,7 +138,7 @@ final class PostgresQueueIntegrationTest extends TestCase
             $highPriorityTask->setPayload(['job' => 'high']);
             $highPriorityTask->enqueue($pdo, priority: Task::PRIO_VERY_HIGH, configuration: $configuration);
 
-            $queue = new PostgresQueue($pdo, $configuration);
+            $queue = new DatabaseQueue($pdo, $configuration);
 
             $firstClaim = $queue->claim('runner-1');
             $secondClaim = $queue->claim('runner-1');
@@ -322,7 +322,7 @@ final class PostgresQueueIntegrationTest extends TestCase
             $schemaManager = new SchemaManager($pdo, $configuration);
             $schemaManager->bootstrap();
 
-            $queue = new PostgresQueue($pdo, $configuration);
+            $queue = new DatabaseQueue($pdo, $configuration);
             $task = new QueueWorkflowTaskFixture();
             $task->getPayload()->attachment = FileAttachment::fromFile($sourcePath);
             $record = $task->enqueue($pdo, configuration: $configuration);
@@ -362,7 +362,7 @@ final class PostgresQueueIntegrationTest extends TestCase
             $schemaManager = new SchemaManager($pdo, $configuration);
             $schemaManager->bootstrap();
 
-            $queue = new PostgresQueue($pdo, $configuration);
+            $queue = new DatabaseQueue($pdo, $configuration);
             $expiredTaskId = $this->enqueueTask($pdo, $configuration, ['job' => 'expired'])->taskId;
             $futureTaskId = $this->enqueueTask($pdo, $configuration, ['job' => 'future'])->taskId;
             $queuedTaskId = $this->enqueueTask($pdo, $configuration, ['job' => 'queued'])->taskId;
@@ -426,7 +426,7 @@ final class PostgresQueueIntegrationTest extends TestCase
             $schemaManager = new SchemaManager($pdo, $configuration);
             $schemaManager->bootstrap();
 
-            $queue = new PostgresQueue($pdo, $configuration);
+            $queue = new DatabaseQueue($pdo, $configuration);
             $taskId = $this->enqueueTask($pdo, $configuration, ['job' => 'locked'])->taskId;
 
             self::assertNotNull($taskId);
@@ -461,13 +461,13 @@ final class PostgresQueueIntegrationTest extends TestCase
             $schemaManager = new SchemaManager($pdo, $configuration);
             $schemaManager->bootstrap();
 
-            $queue = new PostgresQueue($pdo, $configuration);
+            $queue = new DatabaseQueue($pdo, $configuration);
             $taskId = $this->enqueueTask($pdo, $configuration, ['job' => 'tx-required'])->taskId;
 
             self::assertNotNull($taskId);
 
             $this->expectException(QueueException::class);
-            $this->expectExceptionMessage('PostgresQueue::update() requires an active transaction.');
+            $this->expectExceptionMessage('DatabaseQueue::update() requires an active transaction.');
 
             $queue->update($taskId, ['cancel_requested' => true]);
         } finally {
@@ -568,7 +568,7 @@ final class PostgresQueueIntegrationTest extends TestCase
     /**
      * @param array<string, mixed> $changes
      */
-    private function updateTask(\PDO $pdo, PostgresQueue $queue, int $taskId, array $changes): void {
+    private function updateTask(\PDO $pdo, DatabaseQueue $queue, int $taskId, array $changes): void {
         $pdo->beginTransaction();
 
         try {

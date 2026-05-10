@@ -7,7 +7,7 @@ namespace ByLexus\TaskRunner\Tests\Integration;
 use ByLexus\TaskRunner\Enum\StepStatus;
 use ByLexus\TaskRunner\Enum\TaskStatus;
 use ByLexus\TaskRunner\FileAttachment;
-use ByLexus\TaskRunner\Queue\PostgresQueue;
+use ByLexus\TaskRunner\Queue\DatabaseQueue;
 use ByLexus\TaskRunner\Queue\QueueConfiguration;
 use ByLexus\TaskRunner\Queue\QueueRecord;
 use ByLexus\TaskRunner\Queue\SchemaManager;
@@ -346,7 +346,7 @@ final class RunnerIntegrationTest extends TestCase
 
             self::assertNotNull($record->taskId);
 
-            $queue = new PostgresQueue($pdo, $configuration);
+            $queue = new DatabaseQueue($pdo, $configuration);
             $past = new \DateTimeImmutable('-1 hour');
             $this->updateTask(
                 $pdo,
@@ -468,7 +468,7 @@ final class RunnerIntegrationTest extends TestCase
 
             self::assertNotNull($record->taskId);
 
-            $queue = new PostgresQueue($pdo, $configuration);
+            $queue = new DatabaseQueue($pdo, $configuration);
             $startedAt = new \DateTimeImmutable('-5 seconds');
             $this->updateTask(
                 $pdo,
@@ -1174,7 +1174,7 @@ final class RunnerIntegrationTest extends TestCase
     /**
      * @param array<string, mixed> $changes
      */
-    private function updateTask(\PDO $pdo, PostgresQueue $queue, int $taskId, array $changes): void {
+    private function updateTask(\PDO $pdo, DatabaseQueue $queue, int $taskId, array $changes): void {
         $pdo->beginTransaction();
 
         try {

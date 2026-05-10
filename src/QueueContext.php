@@ -77,6 +77,6 @@ final class QueueContext {
     }
 
     public function exportDdl(): string {
-        return SchemaManager::exportDdl($this->queueConfiguration);
+        return $this->createSchemaManager()->exportDdl();
     }
 }

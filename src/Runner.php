@@ -10,10 +10,12 @@ use ByLexus\TaskRunner\Enum\TaskStatus;
 use ByLexus\TaskRunner\Enum\RetryMode;
 use ByLexus\TaskRunner\Exception\ConfigurationException;
 use ByLexus\TaskRunner\Metadata\MetadataResolver;
-use ByLexus\TaskRunner\Queue\PostgresQueue;
+use ByLexus\TaskRunner\Queue\DatabaseQueue;
 use ByLexus\TaskRunner\Queue\QueueConfiguration;
 use ByLexus\TaskRunner\Queue\QueueRecord;
 use ByLexus\TaskRunner\Queue\SchemaManager;
+use ByLexus\TaskRunner\Queue\Db\DatabasePlatform;
+use ByLexus\TaskRunner\Queue\Db\DatabasePlatformResolver;
 use ByLexus\TaskRunner\Result\ErrorInfo;
 use ByLexus\TaskRunner\Result\StepResult;
 use ByLexus\TaskRunner\Runtime\SignalHandler;
@@ -39,7 +41,8 @@ class Runner {
     private QueueConfiguration $queueConfiguration;
     private RunnerConfiguration $runnerConfiguration;
     private MetadataResolver $metadataResolver;
-    private PostgresQueue $queue;
+    private DatabaseQueue $queue;
+    private DatabasePlatform $platform;
     private SignalHandler $signalHandler;
     private LoggerInterface $logger;
     private bool $notificationListenerRegistered = false;
@@ -56,7 +59,8 @@ class Runner {
         $this->runnerConfiguration = $runnerConfiguration ?? new RunnerConfiguration();
         $this->metadataResolver = $metadataResolver ?? new MetadataResolver();
         $this->logger = $this->runnerConfiguration->getLogger() ?? new NullLogger();
-        $this->queue = new PostgresQueue($this->connection, $this->queueConfiguration, $this->logger);
+        $this->platform = DatabasePlatformResolver::resolve($this->connection);
+        $this->queue = new DatabaseQueue($this->connection, $this->queueConfiguration, $this->logger);
         $this->signalHandler = new SignalHandler($this->handleStopRequested(...));
 
         $this->logger->debug('Runner initialized.', [
@@ -184,7 +188,7 @@ class Runner {
     }
 
     private function ensureNotificationListener(): void {
-        if ($this->notificationListenerRegistered) {
+        if ($this->notificationListenerRegistered || !$this->platform->supportsNotifications()) {
             return;
         }
 
@@ -432,35 +436,9 @@ class Runner {
         $this->connection->beginTransaction();
 
         try {
-            $statement = $this->connection->prepare(
-                sprintf(
-                    <<<'SQL'
-SELECT *
-FROM %s
-WHERE task_status = :task_status
-  AND step_status = :step_status
-  AND step_started_at IS NOT NULL
-FOR UPDATE SKIP LOCKED
-SQL,
-                    $this->quotedQueueTableName(),
-                ),
-            );
-            $statement->execute([
-                'task_status' => TaskStatus::RUNNING->value,
-                'step_status' => StepStatus::RUNNING->value,
-            ]);
-
             $timedOutClaims = 0;
 
-            while (true) {
-                $row = $statement->fetch(\PDO::FETCH_ASSOC);
-
-                if (!is_array($row)) {
-                    break;
-                }
-
-                $record = QueueRecord::fromDatabaseRow($row);
-
+            foreach ($this->queue->findStartedRunningTasks() as $record) {
                 if ($record->taskId === null || $record->stepClass === null) {
                     continue;
                 }
@@ -525,36 +503,9 @@ SQL,
         $this->connection->beginTransaction();
 
         try {
-            $statement = $this->connection->prepare(
-                sprintf(
-                    <<<'SQL'
-SELECT *
-FROM %s
-WHERE task_status = :task_status
-  AND step_status = :step_status
-  AND claimed_by = :claimed_by
-FOR UPDATE SKIP LOCKED
-SQL,
-                    $this->quotedQueueTableName(),
-                ),
-            );
-            $statement->execute([
-                'task_status' => TaskStatus::RUNNING->value,
-                'step_status' => StepStatus::RUNNING->value,
-                'claimed_by' => $this->runnerConfiguration->getRunnerId(),
-            ]);
-
             $failedClaims = 0;
 
-            while (true) {
-                $row = $statement->fetch(\PDO::FETCH_ASSOC);
-
-                if (!is_array($row)) {
-                    break;
-                }
-
-                $record = QueueRecord::fromDatabaseRow($row);
-
+            foreach ($this->queue->findClaimedRunningTasks($this->runnerConfiguration->getRunnerId()) as $record) {
                 if ($record->taskId === null) {
                     continue;
                 }
@@ -958,21 +909,5 @@ SQL,
         $now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
 
         return $now > $deadline;
-    }
-
-    private function quotedQueueTableName(): string {
-        if ($this->queueConfiguration->getSchemaName() === null) {
-            return $this->quotedIdentifier($this->queueConfiguration->getTableName());
-        }
-
-        return sprintf(
-            '%s.%s',
-            $this->quotedIdentifier($this->queueConfiguration->getSchemaName()),
-            $this->quotedIdentifier($this->queueConfiguration->getTableName()),
-        );
-    }
-
-    private function quotedIdentifier(string $identifier): string {
-        return '"' . str_replace('"', '""', $identifier) . '"';
     }
 }

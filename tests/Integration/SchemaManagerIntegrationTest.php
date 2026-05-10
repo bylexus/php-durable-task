@@ -39,7 +39,7 @@ final class SchemaManagerIntegrationTest extends TestCase
         $tableName = PostgresIntegrationConnection::uniqueTableName();
 
         try {
-            $ddl = SchemaManager::exportDdl(new QueueConfiguration($tableName));
+            $ddl = (new SchemaManager($pdo, new QueueConfiguration($tableName)))->exportDdl();
 
             foreach ($this->statementsFromDdl($ddl) as $statement) {
                 $pdo->exec($statement);
