@@ -9,7 +9,7 @@ use ByLexus\TaskRunner\Queue\Db\DatabasePlatformResolver;
 use ByLexus\TaskRunner\Queue\Db\MySqlPlatform;
 use ByLexus\TaskRunner\Queue\Db\PostgresPlatform;
 use ByLexus\TaskRunner\Queue\QueueConfiguration;
-use ByLexus\TaskRunner\Queue\SchemaManager;
+use ByLexus\TaskRunner\QueueContext;
 use PHPUnit\Framework\TestCase;
 
 final class DatabasePlatformResolverTest extends TestCase
@@ -59,10 +59,10 @@ final class DatabasePlatformResolverTest extends TestCase
         $this->expectException(ConfigurationException::class);
         $this->expectExceptionMessage('SQLite queue configuration does not support schema names.');
 
-        new SchemaManager(
+        (new QueueContext(
             $this->mockPdo('sqlite'),
             new QueueConfiguration('task_queue', 'app_jobs'),
-        );
+        ))->getSchemaManager();
     }
 
     public function testPostgresIntrospectionDoesNotBindSyntheticDefaultSchemaParameter(): void {

@@ -9,6 +9,7 @@ use ByLexus\TaskRunner\Enum\StepStatus;
 use ByLexus\TaskRunner\Metadata\TaskMetadata;
 use ByLexus\TaskRunner\Queue\DatabaseQueue;
 use ByLexus\TaskRunner\Queue\QueueRecord;
+use ByLexus\TaskRunner\QueueContext;
 use ByLexus\TaskRunner\Result\ErrorInfo;
 use ByLexus\TaskRunner\Result\StepResult;
 use ByLexus\TaskRunner\Runner;
@@ -30,9 +31,7 @@ final class RunnerTest extends TestCase
     public function testRunnerUsesConfiguredLoggerForRunnerAndQueue(): void {
         $logger = new SpyLogger();
         $runner = new Runner(
-            $this->createStub(\PDO::class),
-            null,
-            new RunnerConfiguration('runner-test', false, 30, null, $logger),
+            $this->createQueueContext(new RunnerConfiguration('runner-test', false, 30, null, $logger)),
         );
 
         self::assertSame($logger, $this->readPrivateProperty($runner, 'logger'));
@@ -41,11 +40,7 @@ final class RunnerTest extends TestCase
     }
 
     public function testRunnerDefaultsToNullLoggerWhenNoLoggerIsConfigured(): void {
-        $runner = new Runner(
-            $this->createStub(\PDO::class),
-            null,
-            new RunnerConfiguration('runner-test'),
-        );
+        $runner = new Runner($this->createQueueContext(new RunnerConfiguration('runner-test')));
 
         self::assertInstanceOf(NullLogger::class, $this->readPrivateProperty($runner, 'logger'));
         self::assertInstanceOf(
@@ -55,11 +50,7 @@ final class RunnerTest extends TestCase
     }
 
     public function testRunnerResolvesCleanupIntervalByTerminalStatus(): void {
-        $runner = new Runner(
-            $this->createStub(\PDO::class),
-            null,
-            new RunnerConfiguration('runner-test'),
-        );
+        $runner = new Runner($this->createQueueContext(new RunnerConfiguration('runner-test')));
         $metadata = new TaskMetadata(
             new \DateInterval('PT1H'),
             new \DateInterval('PT0S'),
@@ -102,11 +93,7 @@ final class RunnerTest extends TestCase
     }
 
     public function testChangesForResultDelaysFailedRetriesUntilRetryDelayHasElapsed(): void {
-        $runner = new Runner(
-            $this->createStub(\PDO::class),
-            null,
-            new RunnerConfiguration('runner-test'),
-        );
+        $runner = new Runner($this->createQueueContext(new RunnerConfiguration('runner-test')));
         $task = new class extends Task {
             public function nextStep(?\ByLexus\TaskRunner\Step $actStep = null): ?\ByLexus\TaskRunner\Step {
                 return null;
@@ -168,11 +155,7 @@ final class RunnerTest extends TestCase
     }
 
     public function testRunnerThrottlesExpiredQueueCleanupToEveryTenSeconds(): void {
-        $runner = new Runner(
-            $this->createStub(\PDO::class),
-            null,
-            new RunnerConfiguration('runner-test'),
-        );
+        $runner = new Runner($this->createQueueContext(new RunnerConfiguration('runner-test')));
 
         self::assertTrue(
             $this->invokePrivateMethod($runner, 'shouldCleanupExpiredQueueRecords', 1_000),
@@ -203,6 +186,10 @@ final class RunnerTest extends TestCase
         $reflection = new \ReflectionMethod($object, $methodName);
 
         return $reflection->invokeArgs($object, $arguments);
+    }
+
+    private function createQueueContext(?RunnerConfiguration $runnerConfiguration = null): QueueContext {
+        return new QueueContext($this->createStub(\PDO::class), runnerConfiguration: $runnerConfiguration);
     }
 
     private function toSeconds(\DateInterval $interval): int {

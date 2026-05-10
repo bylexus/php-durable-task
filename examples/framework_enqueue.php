@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use ByLexus\TaskRunner\Queue\SchemaManager;
+use ByLexus\TaskRunner\QueueContext;
 use Psr\Log\LoggerInterface;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
@@ -14,12 +14,12 @@ $user = getenv('PHP_TR_DB_USER') ?: 'postgres';
 $password = getenv('PHP_TR_DB_PASS') ?: 'postgres';
 
 $pdo = new PDO($dsn, $user, $password);
-// Producer commands often own schema bootstrap in real applications or deployment jobs.
-(new SchemaManager($pdo))->bootstrap();
-
 // This container represents the application services available at enqueue time.
 $container = new FrameworkDemoContainer();
 $logger = $container->get(LoggerInterface::class);
+$queue = new QueueContext($pdo, null, $container, $logger);
+// Producer commands often own schema bootstrap in real applications or deployment jobs.
+$queue->bootstrapSchema();
 $userId = (int) ($argv[1] ?? 42);
 
 // Enqueue side can instantiate the task directly, just like any other application service.
@@ -31,9 +31,7 @@ $task = new ImportUserProfileTask(
 );
 
 // Only class names and payload are stored; the worker will reconstruct fresh task and step instances later.
-$record = $task
-    ->forUserId($userId)
-    ->enqueue($pdo);
+$record = $queue->enqueue($task->forUserId($userId));
 
 fwrite(
     STDOUT,

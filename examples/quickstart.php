@@ -3,10 +3,8 @@
 declare(strict_types=1);
 
 use ByLexus\TaskRunner\Attribute\CleanupAfter;
-use ByLexus\TaskRunner\Queue\SchemaManager;
+use ByLexus\TaskRunner\QueueContext;
 use ByLexus\TaskRunner\Result\StepResult;
-use ByLexus\TaskRunner\Runner;
-use ByLexus\TaskRunner\RunnerConfiguration;
 use ByLexus\TaskRunner\Step;
 use ByLexus\TaskRunner\Task;
 
@@ -67,18 +65,16 @@ final class GreetingTask extends Task {
 }
 
 $pdo = new PDO($dsn, $user, $password);
+$queue = new QueueContext($pdo);
 // Quickstart performs an explicit schema bootstrap instead of relying on worker startup side effects.
-(new SchemaManager($pdo))->bootstrap();
+$queue->bootstrapSchema();
 
 // The task owns the payload. Here we seed it before enqueueing the first step.
 $task = (new GreetingTask())->withName($argv[1] ?? 'PHP TR');
-$record = $task->enqueue($pdo);
+$record = $queue->enqueue($task);
 
 // A runner claims one queued row, hydrates the task and step, executes them, and persists the result.
-$runner = new Runner(
-    connection: $pdo,
-    runnerConfiguration: new RunnerConfiguration(),
-);
+$runner = $queue->createRunner();
 
 // runSingle() is the smallest useful worker mode for demos, tests, and cron-style processing.
 $processed = $runner->runSingle();

@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace ByLexus\TaskRunner\Tests\Support;
 
 use ByLexus\TaskRunner\Queue\QueueConfiguration;
-use ByLexus\TaskRunner\Queue\SchemaManager;
+use ByLexus\TaskRunner\QueueContext;
+
 abstract class SchemaManagerIntegrationTestCase extends AbstractDatabaseIntegrationTestCase
 {
     public function testBootstrapCreatesSchemaIdempotently(): void {
@@ -14,13 +15,13 @@ abstract class SchemaManagerIntegrationTestCase extends AbstractDatabaseIntegrat
 
         try {
             $configuration = new QueueConfiguration($tableName);
-            $schemaManager = new SchemaManager($pdo, $configuration);
+            $queueContext = new QueueContext($pdo, $configuration);
 
-            $schemaManager->bootstrap();
-            $schemaManager->bootstrap();
+            $queueContext->bootstrapSchema();
+            $queueContext->bootstrapSchema();
 
-            self::assertTrue($schemaManager->tableExists());
-            self::assertTrue($schemaManager->blobTableExists());
+            self::assertTrue($queueContext->tableExists());
+            self::assertTrue($queueContext->blobTableExists());
             self::assertTrue($this->columnExists($pdo, $tableName, 'cleanup_at'));
             self::assertTrue($this->columnExists($pdo, $tableName, 'priority'));
             self::assertTrue($this->columnExists($pdo, $configuration->getBlobTableName(), 'content'));
@@ -36,17 +37,18 @@ abstract class SchemaManagerIntegrationTestCase extends AbstractDatabaseIntegrat
         $tableName = DatabaseIntegrationConnection::uniqueTableName();
 
         try {
-            $ddl = (new SchemaManager($pdo, new QueueConfiguration($tableName)))->exportDdl();
+            $queueContext = new QueueContext($pdo, new QueueConfiguration($tableName));
+            $ddl = $queueContext->exportDdl();
 
             foreach ($this->statementsFromDdl($ddl) as $statement) {
                 $pdo->exec($statement);
             }
 
-            $schemaManager = new SchemaManager($pdo, new QueueConfiguration($tableName));
+            $queueContext = new QueueContext($pdo, new QueueConfiguration($tableName));
 
-            self::assertTrue($schemaManager->tableExists());
-            self::assertTrue($schemaManager->blobTableExists());
-            $schemaManager->validate();
+            self::assertTrue($queueContext->tableExists());
+            self::assertTrue($queueContext->blobTableExists());
+            $queueContext->validateSchema();
             self::assertTrue($this->columnExists($pdo, $tableName, 'cleanup_at'));
             self::assertTrue($this->columnExists($pdo, $tableName, 'priority'));
             self::assertTrue($this->columnExists($pdo, sprintf('%s_blob_data', $tableName), 'content'));
@@ -65,9 +67,9 @@ abstract class SchemaManagerIntegrationTestCase extends AbstractDatabaseIntegrat
 
         try {
             $configuration = new QueueConfiguration($tableName);
-            $schemaManager = new SchemaManager($pdo, $configuration);
+            $queueContext = new QueueContext($pdo, $configuration);
 
-            $schemaManager->bootstrap();
+            $queueContext->bootstrapSchema();
 
             self::assertTrue($this->indexExists($pdo, sprintf('%s_cleanup_at_idx', $tableName)));
             self::assertTrue($this->indexExists($pdo, sprintf('%s_task_status_available_at_idx', $tableName)));
@@ -84,8 +86,7 @@ abstract class SchemaManagerIntegrationTestCase extends AbstractDatabaseIntegrat
         try {
             $this->createLegacyQueueTableWithoutPriority($pdo, $tableName);
 
-            $schemaManager = new SchemaManager($pdo, new QueueConfiguration($tableName));
-            $schemaManager->bootstrap();
+            (new QueueContext($pdo, new QueueConfiguration($tableName)))->bootstrapSchema();
 
             self::assertTrue($this->columnExists($pdo, $tableName, 'priority'));
         } finally {
@@ -99,8 +100,8 @@ abstract class SchemaManagerIntegrationTestCase extends AbstractDatabaseIntegrat
         $platformName = DatabaseIntegrationConnection::platform($pdo)->getName();
         $tableName = DatabaseIntegrationConnection::uniqueTableName();
         $schemaName = $platformName === 'postgresql'
-            ? DatabaseIntegrationConnection::uniqueSchemaName()
-            : DatabaseIntegrationConnection::configuredDatabaseName($this);
+        ? DatabaseIntegrationConnection::uniqueSchemaName()
+        : DatabaseIntegrationConnection::configuredDatabaseName($this);
 
         try {
             if ($platformName !== 'postgresql' && $platformName !== 'mysql' && $platformName !== 'mariadb') {
@@ -108,12 +109,12 @@ abstract class SchemaManagerIntegrationTestCase extends AbstractDatabaseIntegrat
             }
 
             $configuration = new QueueConfiguration($tableName, $schemaName);
-            $schemaManager = new SchemaManager($pdo, $configuration);
+            $queueContext = new QueueContext($pdo, $configuration);
 
-            $schemaManager->bootstrap();
+            $queueContext->bootstrapSchema();
 
-            self::assertTrue($schemaManager->tableExists());
-            self::assertTrue($schemaManager->blobTableExists());
+            self::assertTrue($queueContext->tableExists());
+            self::assertTrue($queueContext->blobTableExists());
             self::assertTrue($this->columnExists($pdo, $tableName, 'cleanup_at', $schemaName));
             self::assertTrue($this->columnExists($pdo, $configuration->getBlobTableName(), 'content', $schemaName));
             self::assertTrue($this->indexExists($pdo, sprintf('%s_cleanup_at_idx', $tableName), $schemaName));

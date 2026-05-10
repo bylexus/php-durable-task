@@ -40,36 +40,38 @@ See a full example in [examples/quickstart.php](examples/quickstart.php).
 This quickstart just implements a single Task with a single Step to work on. This chapter explains how to get startet in detail.
 
 
-### Install
+### Setup
 
-Use [composer](https://getcomposer.org/):
-
-```sh
-$ composer require bylexus/php-tr
-```
-
-Create the DB objects (1 table, some indexes), either by invoking the SchemaManager:
+Create a `QueueContext` instance: the `QueueContext` is the configuration object that contains
+all the needed dependencies:
 
 ```php
+use ByLexus\TaskRunner\QueueContext;
+use ByLexus\TaskRunner\Queue\QueueConfiguration;
 
-use ByLexus\TaskRunner\Queue\SchemaManager;
+$context = new QueueContext(
+    connection: getDBConn(), // get your PDO connection as usual
+    queueConfiguration: new QueueConfiguration(schemaName: 'appschema'),
+    // ...
+);
 
-// Use the Schema Manager with your existing PDO connection:
-(new SchemaManager($pdo))->bootstrap();
+```
+
+The context object will be used for all interaction with the Tasks / runner.
+
+
+Create the DB objects automatically:
+
+```php
+// Reuse the same QueueContext for schema management, enqueueing, and runners.
+$context->bootstrapSchema();
 ```
 
 or by exporting the needed SQL through your own tooling:
 
 ```php
-use ByLexus\TaskRunner\Queue\QueueConfiguration;
-use ByLexus\TaskRunner\Queue\SchemaManager;
 
-$schemaManager = new SchemaManager(
-    $pdo,
-    new QueueConfiguration('app_background_jobs', 'background_jobs'),
-);
-
-$ddl = $schemaManager->exportDdl();
+$ddl = $context->exportDdl();
 
 // Dump, log, or feed $ddl into your migration tooling.
 ```
@@ -147,24 +149,13 @@ final class GreetingTask extends Task {
 Now you're ready to dispatch the task:
 
 ```php
+
 // The task owns the payload. Here we seed it before enqueueing the first step.
 $task = (new GreetingTask())->withName('Ada Lovelace');
-$task->enqueue($pdo);
+$context->enqueue($task);
 
 // Optional: lower numbers are picked first by runners.
-$task->enqueue($pdo, priority: Task::PRIO_HIGH);
-```
-
-If you want to keep the queue connection and queue configuration together, create a `QueueContext` once and reuse it:
-
-```php
-use ByLexus\TaskRunner\Queue\QueueConfiguration;
-use ByLexus\TaskRunner\QueueContext;
-
-$queueConfiguration = new QueueConfiguration('app_background_jobs', 'background_jobs');
-$queue = new QueueContext($pdo, $queueConfiguration);
-$queue->enqueue((new GreetingTask())->withName('Ada Lovelace'));
-$queue->enqueue((new GreetingTask())->withName('Grace Hopper'), priority: Task::PRIO_HIGH);
+$context->enqueue($task, priority: Task::PRIO_HIGH);
 ```
 
 Tasks default to priority `3` (`Task::PRIO_NORMAL`). You can choose values from `1` to `5` using the built-in constants:
@@ -177,34 +168,28 @@ Tasks default to priority `3` (`Task::PRIO_NORMAL`). You can choose values from 
 
 When multiple queued tasks are available, runners claim the highest-priority work first, then fall back to `available_at` and creation time.
 
+If your queued tasks need constructor injection, configure the container and logger once on `QueueContext` and reuse that same object for enqueueing, lookup, and runner creation.
+
 ### Start a runner to work on the tasks
 
 A Runner can now be instantiated in a separate script, e.g. a script that runs server-side as a daemon:
 
 ```php
-use ByLexus\TaskRunner\Runner;
-use ByLexus\TaskRunner\RunnerConfiguration;
-
-// A runner claims one queued row, hydrates the task and step, executes them, and persists the result.
-$runner = new Runner(
-    connection: $pdo, // a PDO connection object for PostgreSQL, MySQL, MariaDB, or SQLite
-    runnerConfiguration: new RunnerConfiguration(),
-);
-
-// start the processing loop:
-$processed = $runner->runLoop();
-```
-
-With `QueueContext`, the same setup becomes:
-
-```php
 use ByLexus\TaskRunner\Queue\QueueConfiguration;
 use ByLexus\TaskRunner\QueueContext;
 use ByLexus\TaskRunner\RunnerConfiguration;
+use Psr\Log\LoggerInterface;
 
 $queueConfiguration = new QueueConfiguration('app_background_jobs', 'background_jobs');
-$queue = new QueueContext($pdo, $queueConfiguration);
-$runner = $queue->createRunner(new RunnerConfiguration());
+$context = new QueueContext(
+    connection: $pdo,
+    queueConfiguration: $queueConfiguration,
+    container: $container, // provide your PSR-11 compatible Dependency Injection container
+    logger: $container->get(LoggerInterface::class), // PSR-3 compatible logger
+    runnerConfiguration: new RunnerConfiguration(runnerId: 'app-worker-1'),
+);
+// A runner claims one queued row, hydrates the task and step, executes them, and persists the result.
+$runner = $context->createRunner();
 $runner->runLoop();
 ```
 
@@ -268,11 +253,13 @@ You can safely start multiple runners, as each task can only be claimed by one r
 Each queued task row stores a numeric priority. Priority `1` is the highest priority and `5` is the lowest. If you do not pass a priority when enqueueing, the library stores `3`.
 
 ```php
+use ByLexus\TaskRunner\QueueContext;
 use ByLexus\TaskRunner\Task;
 
+$context = new QueueContext($pdo);
 $task = (new WelcomeTask())->withEmail('ada@example.com');
 
-$task->enqueue($pdo, priority: Task::PRIO_VERY_HIGH);
+$context->enqueue($task, priority: Task::PRIO_VERY_HIGH);
 ```
 
 This is useful when some background work should jump ahead of normal queue traffic without needing a separate queue table.
@@ -368,9 +355,9 @@ The queue uses one database table plus indexes. You have three supported ways to
 Use this when your framework has an installation command, deploy hook, or startup sequence.
 
 ```php
-use ByLexus\TaskRunner\Queue\SchemaManager;
+use ByLexus\TaskRunner\QueueContext;
 
-(new SchemaManager($pdo))->bootstrap();
+(new QueueContext($pdo))->bootstrapSchema();
 ```
 
 If you already use a `QueueContext`, the same wrapper can also manage the schema for that queue:
@@ -380,10 +367,9 @@ use ByLexus\TaskRunner\Queue\QueueConfiguration;
 use ByLexus\TaskRunner\QueueContext;
 
 $queueConfiguration = new QueueConfiguration('app_background_jobs', 'background_jobs');
-$queue = new QueueContext($pdo, $queueConfiguration);
-$queue->bootstrapSchema();
-$queue->validateSchema();
-$ddl = $queue->exportDdl();
+$context = new QueueContext($pdo, $queueConfiguration);
+$context->bootstrapSchema();
+$context->validateSchema();
 ```
 
 This is the most predictable option in production. It creates the queue table if not present, and / or updates it.
@@ -394,14 +380,14 @@ The queue schema includes a `priority` column with default value `3`, so existin
 
 ```php
 use ByLexus\TaskRunner\Queue\QueueConfiguration;
-use ByLexus\TaskRunner\Queue\SchemaManager;
+use ByLexus\TaskRunner\QueueContext;
 
-$schemaManager = new SchemaManager(
+$context = new QueueContext(
     $pdo,
     new QueueConfiguration('custom_queue_table', 'background_jobs'),
 );
 
-$ddl = $schemaManager->exportDdl();
+$ddl = $context->exportDdl();
 ```
 
 This returns the exact DDL string for the configured queue table and backend resolved from your live PDO connection. The library does not ship a standalone dump script anymore; wiring the export into your migration or deployment tooling is your responsibility.
@@ -410,12 +396,13 @@ This returns the exact DDL string for the configured queue table and backend res
 
 ```php
 use ByLexus\TaskRunner\RunnerConfiguration;
-use ByLexus\TaskRunner\Runner;
+use ByLexus\TaskRunner\QueueContext;
 
 $runnerConfiguration = new RunnerConfiguration(
     bootstrapSchemaOnStart: true,
 );
-$runner = new Runner(connection: $pdo, runnerConfiguration: $runnerConfiguration);
+$context = new QueueContext($pdo, runnerConfiguration: $runnerConfiguration);
+$runner = $context->createRunner();
 ```
 
 This is useful for local development or controlled deployments. It is optional and disabled by default.
@@ -427,25 +414,18 @@ Use `QueueConfiguration` when you want more than one queue table, need a non-def
 ```php
 use ByLexus\TaskRunner\Queue\QueueConfiguration;
 use ByLexus\TaskRunner\QueueContext;
+use ByLexus\TaskRunner\RunnerConfiguration;
 
 $queueConfiguration = new QueueConfiguration('app_background_jobs');
 
-$task->enqueue($pdo, $queueConfiguration);
-
-$runner = new Runner(
-    connection: $pdo,
-    queueConfiguration: $queueConfiguration,
-    runnerConfiguration: $runnerConfiguration,
-);
-
-$queue = new QueueContext($pdo, $queueConfiguration);
-$queue->enqueue($task);
-$queue->createRunner($runnerConfiguration)->runLoop();
+$context = new QueueContext($pdo, $queueConfiguration, runnerConfiguration: $runnerConfiguration);
+$context->enqueue($task);
+$context->createRunner()->runLoop();
 ```
 
 The same `QueueConfiguration` must be used consistently by producers, runners, and schema bootstrap.
 
-`QueueContext` is the simplest way to enforce that consistency in application code because it also exposes `createSchemaManager()`, `bootstrapSchema()`, `validateSchema()`, `tableExists()`, `blobTableExists()`, and `exportDdl()` on the same shared queue context backed by the configured PDO connection.
+`QueueContext` is the simplest way to enforce that consistency in application code because it exposes `getTask()`, `getTasks()`, `createRunner()`, `getSchemaManager()`, `bootstrapSchema()`, `validateSchema()`, `tableExists()`, `blobTableExists()`, and `exportDdl()` on the same shared queue context backed by the configured PDO connection.
 
 To place the queue in a specific namespace, pass the schema name as the second argument:
 
@@ -464,7 +444,8 @@ Backend-specific behavior:
 ### Single pass worker
 
 ```php
-$runner = new Runner(connection: $pdo);
+$context = new QueueContext($pdo);
+$runner = $context->createRunner();
 $processed = $runner->runSingle();
 ```
 
@@ -475,13 +456,15 @@ $processed = $runner->runSingle();
 Start a long-running runner using the `runLoop()` function. This is best used in conjunction with a process manager like `systemd` or `supervisord`.
 
 ```php
-$runner = new Runner(
-    connection: $pdo,
+$context = new QueueContext(
+    $pdo,
     runnerConfiguration: new RunnerConfiguration(
         runnerId: 'billing-worker-1',
         notificationWaitTimeoutSeconds: 15,
     ),
 );
+
+$runner = $context->createRunner();
 
 $runner->runLoop();
 ```
@@ -504,7 +487,7 @@ The framework-oriented example lives in:
 The integration contract is:
 
 1. Your producer and worker processes must both load the same task and step classes.
-2. Your worker must pass a PSR-11 container into `RunnerConfiguration::container`.
+2. Your worker should configure a shared `QueueContext` with the PSR-11 container and logger used for task lookup and runner hydration.
 3. Constructor parameters must be resolvable class or interface types. Builtin parameters must have defaults.
 4. `LoggerInterface` is resolved from the container when available; otherwise the runner logger or `NullLogger` is used.
 5. If a claimed task or step cannot be instantiated, the runner persists a terminal failure for that row.
@@ -516,20 +499,21 @@ Typical worker bootstrap:
 
 declare(strict_types=1);
 
-use ByLexus\TaskRunner\Runner;
+use ByLexus\TaskRunner\QueueContext;
 use ByLexus\TaskRunner\RunnerConfiguration;
 use Psr\Log\LoggerInterface;
 
 $container = $app->getContainer();
 
-$runner = new Runner(
-    connection: $pdo,
-    runnerConfiguration: new RunnerConfiguration(
-        container: $container,
-        logger: $container->get(LoggerInterface::class),
-        bootstrapSchemaOnStart: false,
-    ),
+$context = new QueueContext(
+    $pdo,
+    null,
+    $container,
+    $container->get(LoggerInterface::class),
+    new RunnerConfiguration(bootstrapSchemaOnStart: false),
 );
+
+$runner = $context->createRunner();
 
 $runner->runLoop();
 ```

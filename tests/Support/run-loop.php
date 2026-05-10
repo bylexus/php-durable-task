@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 use ByLexus\TaskRunner\Tests\Support\DatabaseIntegrationConnection;
 use ByLexus\TaskRunner\Queue\QueueConfiguration;
-use ByLexus\TaskRunner\Runner;
+use ByLexus\TaskRunner\QueueContext;
 use ByLexus\TaskRunner\RunnerConfiguration;
 
 require dirname(__DIR__, 2) . '/vendor/autoload.php';
@@ -39,11 +39,12 @@ if (!$pdo instanceof PDO) {
     exit(1);
 }
 
-$runner = new Runner(
+$queue = new QueueContext(
     $pdo,
     new QueueConfiguration($tableName),
-    new RunnerConfiguration('runner-loop-process', false, $timeoutSeconds),
+    runnerConfiguration: new RunnerConfiguration('runner-loop-process', false, $timeoutSeconds),
 );
+$runner = $queue->createRunner();
 
 if ($readyPath !== null) {
     file_put_contents($readyPath, "ready\n");

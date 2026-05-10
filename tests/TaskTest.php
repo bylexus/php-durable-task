@@ -9,6 +9,7 @@ use ByLexus\TaskRunner\Enum\TaskStatus;
 use ByLexus\TaskRunner\Exception\ConfigurationException;
 use ByLexus\TaskRunner\FileAttachment;
 use ByLexus\TaskRunner\Queue\QueueRecord;
+use ByLexus\TaskRunner\QueueContext;
 use ByLexus\TaskRunner\Task;
 use ByLexus\TaskRunner\Tests\Fixture\ConstructorInjectedServiceFixture;
 use ByLexus\TaskRunner\Tests\Fixture\ConstructorInjectedTaskFixture;
@@ -219,19 +220,21 @@ final class TaskTest extends TestCase
 
     public function testEnqueueRequiresInitialStep(): void {
         $task = new EmptyWorkflowTaskFixture();
+        $queue = new QueueContext($this->createStub(\PDO::class));
 
         $this->expectException(ConfigurationException::class);
 
-        $task->enqueue($this->createStub(\PDO::class));
+        $task->enqueue($queue);
     }
 
     public function testEnqueueRejectsInvalidPriority(): void {
         $task = new EmptyWorkflowTaskFixture();
+        $queue = new QueueContext($this->createStub(\PDO::class));
 
         $this->expectException(ConfigurationException::class);
         $this->expectExceptionMessage('Task priority must be between 1 and 5, got 0.');
 
-        $task->enqueue($this->createStub(\PDO::class), priority: 0);
+        $task->enqueue($queue, priority: 0);
     }
 
     public function testNullPayloadIsExposedAsObjectOnTaskWhenStepIsHydrated(): void {

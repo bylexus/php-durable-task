@@ -109,6 +109,30 @@ final class DatabaseQueue {
         );
     }
 
+    /**
+     * @return list<QueueRecord>
+     */
+    public function find(?TaskStatus $taskStatus = null): array {
+        $statement = $this->connection->prepare(
+            sprintf(
+                <<<'SQL'
+SELECT *
+FROM %s%s
+ORDER BY priority ASC, available_at ASC, task_created_at ASC
+SQL,
+                $this->quotedTableName(),
+                $taskStatus === null ? '' : "\nWHERE task_status = :task_status",
+            ),
+        );
+        $statement->execute(
+            $taskStatus === null
+                ? []
+                : ['task_status' => $taskStatus->value],
+        );
+
+        return $this->fetchRecordsFromStatement($statement);
+    }
+
     public function enqueue(Task $task, Step $firstStep, int $priority = Task::PRIO_NORMAL): QueueRecord {
         $now = $this->currentTimestamp();
         $startedTransaction = false;
@@ -631,6 +655,13 @@ SQL,
         );
         $statement->execute($parameters);
 
+        return $this->fetchRecordsFromStatement($statement);
+    }
+
+    /**
+     * @return list<QueueRecord>
+     */
+    private function fetchRecordsFromStatement(\PDOStatement $statement): array {
         try {
             $rows = $statement->fetchAll(\PDO::FETCH_ASSOC);
         } finally {

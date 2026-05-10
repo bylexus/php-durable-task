@@ -37,6 +37,7 @@ class Runner {
     private const STOP_REQUESTED_FAILURE_CODE = 499;
     private const STOP_REQUESTED_FAILURE_MESSAGE = 'Runner stop was requested before the current step completed.';
 
+    private QueueContext $queueContext;
     private \PDO $connection;
     private QueueConfiguration $queueConfiguration;
     private RunnerConfiguration $runnerConfiguration;
@@ -48,16 +49,12 @@ class Runner {
     private bool $notificationListenerRegistered = false;
     private ?int $lastExpiredQueueCleanupTimestamp = null;
 
-    public function __construct(
-        \PDO $connection,
-        ?QueueConfiguration $queueConfiguration = null,
-        ?RunnerConfiguration $runnerConfiguration = null,
-        ?MetadataResolver $metadataResolver = null,
-    ) {
-        $this->connection = $connection;
-        $this->queueConfiguration = $queueConfiguration ?? new QueueConfiguration();
-        $this->runnerConfiguration = $runnerConfiguration ?? new RunnerConfiguration();
-        $this->metadataResolver = $metadataResolver ?? new MetadataResolver();
+    public function __construct(QueueContext $queueContext) {
+        $this->queueContext = $queueContext;
+        $this->connection = $queueContext->getConnection();
+        $this->queueConfiguration = $queueContext->getQueueConfiguration();
+        $this->runnerConfiguration = $queueContext->getRunnerConfiguration();
+        $this->metadataResolver = $queueContext->getMetadataResolver();
         $this->logger = $this->runnerConfiguration->getLogger() ?? new NullLogger();
         $this->platform = DatabasePlatformResolver::resolve($this->connection);
         $this->queue = new DatabaseQueue($this->connection, $this->queueConfiguration, $this->logger);
@@ -183,8 +180,7 @@ class Runner {
             'runnerId' => $this->runnerConfiguration->getRunnerId(),
         ]);
 
-        $schemaManager = new SchemaManager($this->connection, $this->queueConfiguration);
-        $schemaManager->bootstrap();
+        $this->queueContext->getSchemaManager()->bootstrap();
     }
 
     private function ensureNotificationListener(): void {

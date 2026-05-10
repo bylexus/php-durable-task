@@ -12,7 +12,7 @@ use ByLexus\TaskRunner\Queue\AttachmentBlobStore;
 use ByLexus\TaskRunner\Queue\DatabaseQueue;
 use ByLexus\TaskRunner\Queue\QueueConfiguration;
 use ByLexus\TaskRunner\Queue\QueueRecord;
-use ByLexus\TaskRunner\Queue\SchemaManager;
+use ByLexus\TaskRunner\QueueContext;
 use ByLexus\TaskRunner\Task;
 use ByLexus\TaskRunner\Tests\Fixture\QueueWorkflowTaskFixture;
 
@@ -26,15 +26,15 @@ abstract class DatabaseQueueIntegrationTestCase extends AbstractDatabaseIntegrat
 
         try {
             $configuration = new QueueConfiguration($tableName);
-            $schemaManager = new SchemaManager($pdo, $configuration);
-            $schemaManager->bootstrap();
+            $queueContext = new QueueContext($pdo, $configuration);
+            $queueContext->bootstrapSchema();
 
             $queue = new DatabaseQueue($pdo, $configuration);
             $listener->exec(sprintf('LISTEN "%s"', $queue->getNotificationChannel()));
 
             $task = new QueueWorkflowTaskFixture();
             $task->setPayload(['job' => 'alpha']);
-            $record = $task->enqueue($pdo, configuration: $configuration);
+            $record = $task->enqueue($queueContext);
 
             self::assertNotNull($record->taskId);
             self::assertSame(Task::PRIO_NORMAL, $record->priority);
@@ -58,12 +58,12 @@ abstract class DatabaseQueueIntegrationTestCase extends AbstractDatabaseIntegrat
 
         try {
             $configuration = new QueueConfiguration($tableName);
-            $schemaManager = new SchemaManager($pdo, $configuration);
-            $schemaManager->bootstrap();
+            $queueContext = new QueueContext($pdo, $configuration);
+            $queueContext->bootstrapSchema();
 
             $task = new QueueWorkflowTaskFixture();
             $task->setPayload(['job' => 'beta']);
-            $task->enqueue($pdo, configuration: $configuration);
+            $task->enqueue($queueContext);
 
             $firstQueue = new DatabaseQueue($pdo, $configuration);
             $secondQueue = new DatabaseQueue($otherPdo, $configuration);
@@ -96,15 +96,15 @@ abstract class DatabaseQueueIntegrationTestCase extends AbstractDatabaseIntegrat
 
         try {
             $configuration = new QueueConfiguration($tableName, $schemaName);
-            $schemaManager = new SchemaManager($pdo, $configuration);
-            $schemaManager->bootstrap();
+            $queueContext = new QueueContext($pdo, $configuration);
+            $queueContext->bootstrapSchema();
 
             $queue = new DatabaseQueue($pdo, $configuration);
             $listener->exec(sprintf('LISTEN "%s"', $queue->getNotificationChannel()));
 
             $task = new QueueWorkflowTaskFixture();
             $task->setPayload(['job' => 'schema-aware']);
-            $record = $task->enqueue($pdo, configuration: $configuration);
+            $record = $task->enqueue($queueContext);
 
             self::assertNotNull($record->taskId);
             self::assertStringContainsString($schemaName, $queue->getNotificationChannel());
@@ -128,16 +128,16 @@ abstract class DatabaseQueueIntegrationTestCase extends AbstractDatabaseIntegrat
 
         try {
             $configuration = new QueueConfiguration($tableName);
-            $schemaManager = new SchemaManager($pdo, $configuration);
-            $schemaManager->bootstrap();
+            $queueContext = new QueueContext($pdo, $configuration);
+            $queueContext->bootstrapSchema();
 
             $lowPriorityTask = new QueueWorkflowTaskFixture();
             $lowPriorityTask->setPayload(['job' => 'low']);
-            $lowPriorityTask->enqueue($pdo, priority: Task::PRIO_VERY_LOW, configuration: $configuration);
+            $lowPriorityTask->enqueue($queueContext, priority: Task::PRIO_VERY_LOW);
 
             $highPriorityTask = new QueueWorkflowTaskFixture();
             $highPriorityTask->setPayload(['job' => 'high']);
-            $highPriorityTask->enqueue($pdo, priority: Task::PRIO_VERY_HIGH, configuration: $configuration);
+            $highPriorityTask->enqueue($queueContext, priority: Task::PRIO_VERY_HIGH);
 
             $queue = new DatabaseQueue($pdo, $configuration);
 
@@ -161,11 +161,11 @@ abstract class DatabaseQueueIntegrationTestCase extends AbstractDatabaseIntegrat
 
         try {
             $configuration = new QueueConfiguration($tableName);
-            $schemaManager = new SchemaManager($pdo, $configuration);
-            $schemaManager->bootstrap();
+            $queueContext = new QueueContext($pdo, $configuration);
+            $queueContext->bootstrapSchema();
 
             $task = new QueueWorkflowTaskFixture();
-            $record = $task->enqueue($pdo, configuration: $configuration);
+            $record = $task->enqueue($queueContext);
 
             self::assertInstanceOf(\stdClass::class, $record->payload);
 
@@ -193,12 +193,12 @@ abstract class DatabaseQueueIntegrationTestCase extends AbstractDatabaseIntegrat
             file_put_contents($sourcePath, 'blob-backed attachment');
 
             $configuration = new QueueConfiguration($tableName);
-            $schemaManager = new SchemaManager($pdo, $configuration);
-            $schemaManager->bootstrap();
+            $queueContext = new QueueContext($pdo, $configuration);
+            $queueContext->bootstrapSchema();
 
             $task = new QueueWorkflowTaskFixture();
             $task->getPayload()->attachment = FileAttachment::fromFile($sourcePath);
-            $record = $task->enqueue($pdo, configuration: $configuration);
+            $record = $task->enqueue($queueContext);
 
             self::assertNotNull($record->taskId);
 
@@ -238,15 +238,15 @@ abstract class DatabaseQueueIntegrationTestCase extends AbstractDatabaseIntegrat
             file_put_contents($secondaryPath, 'nested array attachment');
 
             $configuration = new QueueConfiguration($tableName);
-            $schemaManager = new SchemaManager($pdo, $configuration);
-            $schemaManager->bootstrap();
+            $queueContext = new QueueContext($pdo, $configuration);
+            $queueContext->bootstrapSchema();
 
             $task = new QueueWorkflowTaskFixture();
             $task->getPayload()->details = (object) [
                 'primary' => FileAttachment::fromFile($primaryPath),
             ];
             $task->getPayload()->files = [FileAttachment::fromFile($secondaryPath)];
-            $record = $task->enqueue($pdo, configuration: $configuration);
+            $record = $task->enqueue($queueContext);
 
             self::assertNotNull($record->taskId);
 
@@ -285,14 +285,14 @@ abstract class DatabaseQueueIntegrationTestCase extends AbstractDatabaseIntegrat
             file_put_contents($sourcePath, 'shared attachment');
 
             $configuration = new QueueConfiguration($tableName);
-            $schemaManager = new SchemaManager($pdo, $configuration);
-            $schemaManager->bootstrap();
+            $queueContext = new QueueContext($pdo, $configuration);
+            $queueContext->bootstrapSchema();
 
             $sharedAttachment = FileAttachment::fromFile($sourcePath);
             $task = new QueueWorkflowTaskFixture();
             $task->getPayload()->details = (object) ['primary' => $sharedAttachment];
             $task->getPayload()->files = [$sharedAttachment];
-            $record = $task->enqueue($pdo, configuration: $configuration);
+            $record = $task->enqueue($queueContext);
 
             self::assertNotNull($record->taskId);
 
@@ -320,13 +320,13 @@ abstract class DatabaseQueueIntegrationTestCase extends AbstractDatabaseIntegrat
             file_put_contents($sourcePath, 'expired attachment');
 
             $configuration = new QueueConfiguration($tableName);
-            $schemaManager = new SchemaManager($pdo, $configuration);
-            $schemaManager->bootstrap();
+            $queueContext = new QueueContext($pdo, $configuration);
+            $queueContext->bootstrapSchema();
 
             $queue = new DatabaseQueue($pdo, $configuration);
             $task = new QueueWorkflowTaskFixture();
             $task->getPayload()->attachment = FileAttachment::fromFile($sourcePath);
-            $record = $task->enqueue($pdo, configuration: $configuration);
+            $record = $task->enqueue($queueContext);
 
             self::assertNotNull($record->taskId);
             self::assertSame(1, $this->blobCountForTask($pdo, $configuration, (int) $record->taskId));
@@ -360,8 +360,8 @@ abstract class DatabaseQueueIntegrationTestCase extends AbstractDatabaseIntegrat
 
         try {
             $configuration = new QueueConfiguration($tableName);
-            $schemaManager = new SchemaManager($pdo, $configuration);
-            $schemaManager->bootstrap();
+            $queueContext = new QueueContext($pdo, $configuration);
+            $queueContext->bootstrapSchema();
 
             $queue = new DatabaseQueue($pdo, $configuration);
             $expiredTaskId = $this->enqueueTask($pdo, $configuration, ['job' => 'expired'])->taskId;
@@ -432,8 +432,8 @@ abstract class DatabaseQueueIntegrationTestCase extends AbstractDatabaseIntegrat
 
         try {
             $configuration = new QueueConfiguration($tableName);
-            $schemaManager = new SchemaManager($pdo, $configuration);
-            $schemaManager->bootstrap();
+            $queueContext = new QueueContext($pdo, $configuration);
+            $queueContext->bootstrapSchema();
 
             $queue = new DatabaseQueue($pdo, $configuration);
             $taskId = $this->enqueueTask($pdo, $configuration, ['job' => 'locked'])->taskId;
@@ -467,8 +467,8 @@ abstract class DatabaseQueueIntegrationTestCase extends AbstractDatabaseIntegrat
 
         try {
             $configuration = new QueueConfiguration($tableName);
-            $schemaManager = new SchemaManager($pdo, $configuration);
-            $schemaManager->bootstrap();
+            $queueContext = new QueueContext($pdo, $configuration);
+            $queueContext->bootstrapSchema();
 
             $queue = new DatabaseQueue($pdo, $configuration);
             $taskId = $this->enqueueTask($pdo, $configuration, ['job' => 'tx-required'])->taskId;
@@ -496,7 +496,7 @@ abstract class DatabaseQueueIntegrationTestCase extends AbstractDatabaseIntegrat
         $task = new QueueWorkflowTaskFixture();
         $task->setPayload($payload);
 
-        return $task->enqueue($pdo, configuration: $configuration);
+        return (new QueueContext($pdo, $configuration))->enqueue($task);
     }
 
     /** @return array<string, mixed> */

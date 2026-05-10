@@ -11,7 +11,6 @@ use ByLexus\TaskRunner\Exception\ConfigurationException;
 use ByLexus\TaskRunner\Metadata\MetadataResolver;
 use ByLexus\TaskRunner\Queue\AttachmentBlobStore;
 use ByLexus\TaskRunner\Queue\DatabaseQueue;
-use ByLexus\TaskRunner\Queue\QueueConfiguration;
 use ByLexus\TaskRunner\Queue\QueueRecord;
 use ByLexus\TaskRunner\Result\StepResult;
 use ByLexus\TaskRunner\Runtime\ClassInstantiator;
@@ -200,12 +199,7 @@ abstract class Task {
         $this->materializeRootPayload()->{$propertyOrPayload} = $payload;
     }
 
-    public function enqueue(
-        \PDO $connection,
-        int $priority = self::PRIO_NORMAL,
-        ?QueueConfiguration $configuration = null,
-        ?MetadataResolver $metadataResolver = null,
-    ): QueueRecord {
+    public function enqueue(QueueContext $queueContext, int $priority = self::PRIO_NORMAL): QueueRecord {
         self::assertValidPriority($priority);
 
         $firstStep = $this->nextStep(null);
@@ -216,7 +210,7 @@ abstract class Task {
             );
         }
 
-        $resolver = $metadataResolver ?? new MetadataResolver();
+        $resolver = $queueContext->getMetadataResolver();
         $taskMetadata = $resolver->resolveTaskMetadata(static::class);
         $resolver->resolveStepMetadata($firstStep::class, $taskMetadata);
 
@@ -229,7 +223,11 @@ abstract class Task {
             'stepClass' => $firstStep::class,
         ]);
 
-        $queue = new DatabaseQueue($connection, $configuration, $this->baseLogger);
+        $queue = new DatabaseQueue(
+            $queueContext->getConnection(),
+            $queueContext->getQueueConfiguration(),
+            $this->baseLogger,
+        );
         $record = $queue->enqueue($this, $firstStep, $priority);
 
         $firstStep->hydrateFromQueueRecord($record);

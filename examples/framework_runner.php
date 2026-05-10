@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use ByLexus\TaskRunner\Runner;
+use ByLexus\TaskRunner\QueueContext;
 use ByLexus\TaskRunner\RunnerConfiguration;
 use Psr\Log\LoggerInterface;
 
@@ -20,19 +20,21 @@ $pdo = new PDO($dsn, $user, $password);
 // The worker container is what allows constructor injection during task and step hydration.
 $container = new FrameworkDemoContainer();
 $logger = $container->get(LoggerInterface::class);
-$mode = $argv[1] ?? 'single';
-
-$runner = new Runner(
-    connection: $pdo,
-    runnerConfiguration: new RunnerConfiguration(
+$queue = new QueueContext(
+    $pdo,
+    null,
+    $container,
+    $logger,
+    new RunnerConfiguration(
         // Schema bootstrap is disabled here because the enqueue command already did it explicitly.
         bootstrapSchemaOnStart: false,
-        container: $container,
-        logger: $logger,
         runnerId: 'framework-demo-runner',
         notificationWaitTimeoutSeconds: 10,
     ),
 );
+$mode = $argv[1] ?? 'single';
+
+$runner = $queue->createRunner();
 
 if ($mode === 'loop') {
     // Long-running mode is what you would usually supervise as a worker process.
