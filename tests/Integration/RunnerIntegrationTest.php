@@ -814,6 +814,85 @@ final class RunnerIntegrationTest extends TestCase
         }
     }
 
+    public function testRunSingleWaitsForRunningStepBeforeStoppingOnSigterm(): void {
+        $pdo = PostgresIntegrationConnection::requirePdo($this);
+        $tableName = PostgresIntegrationConnection::uniqueTableName();
+        $markerPath = sprintf('%s/%s.stop', sys_get_temp_dir(), $tableName);
+        @unlink($markerPath);
+
+        try {
+            $configuration = new QueueConfiguration($tableName);
+            $schemaManager = new SchemaManager($pdo, $configuration);
+            $schemaManager->bootstrap();
+
+            $gracefulTask = new GracefulShutdownTaskFixture();
+            $gracefulRecord = $gracefulTask->enqueue($pdo, configuration: $configuration);
+            $followUpTask = new QueueWorkflowTaskFixture();
+            $followUpRecord = $followUpTask->enqueue($pdo, configuration: $configuration);
+
+            self::assertNotNull($gracefulRecord->taskId);
+            self::assertNotNull($followUpRecord->taskId);
+
+            $process = proc_open(
+                [PHP_BINARY, 'tests/Support/run-single.php', $tableName, $markerPath],
+                [
+                    0 => ['pipe', 'r'],
+                    1 => ['pipe', 'w'],
+                    2 => ['pipe', 'w'],
+                ],
+                $pipes,
+                dirname(__DIR__, 2),
+            );
+
+            self::assertIsResource($process);
+
+            try {
+                $this->waitForTaskStatus(
+                    $pdo,
+                    $tableName,
+                    (int) $gracefulRecord->taskId,
+                    TaskStatus::RUNNING->value,
+                    20,
+                );
+
+                proc_terminate($process, SIGTERM);
+
+                $this->waitForTaskStatus(
+                    $pdo,
+                    $tableName,
+                    (int) $gracefulRecord->taskId,
+                    TaskStatus::SUCCEEDED->value,
+                    30,
+                );
+                $this->waitForFile($markerPath, 30);
+
+                $gracefulRow = $this->fetchTaskRow($pdo, $tableName, (int) $gracefulRecord->taskId);
+                $followUpRow = $this->fetchTaskRow($pdo, $tableName, (int) $followUpRecord->taskId);
+
+                self::assertSame(TaskStatus::SUCCEEDED->value, $gracefulRow['task_status']);
+                self::assertSame(StepStatus::SUCCEEDED->value, $gracefulRow['step_status']);
+                self::assertSame(true, $gracefulRow['result_json']['meta']['completedAfterSignal']);
+                self::assertSame(TaskStatus::QUEUED->value, $followUpRow['task_status']);
+                self::assertSame(StepStatus::QUEUED->value, $followUpRow['step_status']);
+                self::assertStringContainsString(
+                    'Cancellation requested via SIGTERM. The runner will stop after the current step completes.',
+                    (string) stream_get_contents($pipes[2]),
+                );
+            } finally {
+                $this->terminateProcess($process);
+
+                foreach ($pipes as $pipe) {
+                    fclose($pipe);
+                }
+
+                proc_close($process);
+            }
+        } finally {
+            @unlink($markerPath);
+            PostgresIntegrationConnection::dropTableIfExists($pdo, $tableName);
+        }
+    }
+
     public function testRunLoopWakesOnNotifyBeforeTimeoutWithPlainPdo(): void {
         $pdo = PostgresIntegrationConnection::requirePdo($this);
         $tableName = PostgresIntegrationConnection::uniqueTableName();

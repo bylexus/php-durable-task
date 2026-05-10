@@ -65,6 +65,7 @@ class Runner {
             'runnerId' => $this->runnerConfiguration->getRunnerId(),
         ]);
         $this->bootstrapSchemaIfConfigured();
+        $this->signalHandler->register();
         $this->cleanupExpiredQueueRecords();
 
         $processed = 0;
@@ -78,6 +79,10 @@ class Runner {
 
             $this->processClaimedRecord($record);
             $processed++;
+
+            if ($this->signalHandler->isStopRequested()) {
+                break;
+            }
         }
 
         if ($processed === 0) {
