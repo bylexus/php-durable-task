@@ -13,6 +13,9 @@ use ByLexus\TaskRunner\Task;
 require dirname(__DIR__) . '/vendor/autoload.php';
 
 // Keep connection settings overridable so the example can run unchanged in local setups.
+// The default DSN targets PostgreSQL. quickstart only uses runSingle(), so no
+// notification wakeup is involved; long-running runLoop() workers only get
+// LISTEN / NOTIFY wakeups on PostgreSQL and poll on the other supported backends.
 $dsn = getenv('PHP_TR_DSN') ?: 'pgsql:host=127.0.0.1;port=5432;dbname=php_tr_test';
 $user = getenv('PHP_TR_DB_USER') ?: 'postgres';
 $password = getenv('PHP_TR_DB_PASS') ?: 'postgres';

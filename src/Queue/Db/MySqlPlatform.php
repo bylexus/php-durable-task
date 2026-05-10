@@ -11,6 +11,12 @@ class MySqlPlatform extends AbstractDatabasePlatform {
         return 'mysql';
     }
 
+    public function formatDateTime(\DateTimeInterface $dateTime): string {
+        return \DateTimeImmutable::createFromInterface($dateTime)
+            ->setTimezone(new \DateTimeZone('UTC'))
+            ->format('Y-m-d H:i:s.u');
+    }
+
     public function quoteIdentifier(string $identifier): string {
         return '`' . str_replace('`', '``', $identifier) . '`';
     }

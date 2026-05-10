@@ -9,6 +9,7 @@ use ByLexus\TaskRunner\Enum\TaskStatus;
 use ByLexus\TaskRunner\Exception\ConfigurationException;
 use ByLexus\TaskRunner\PayloadNormalizer;
 use ByLexus\TaskRunner\Exception\QueueException;
+use ByLexus\TaskRunner\Queue\Db\AbstractDatabasePlatform;
 use ByLexus\TaskRunner\Queue\Db\DatabasePlatform;
 use ByLexus\TaskRunner\Queue\Db\DatabasePlatformResolver;
 use ByLexus\TaskRunner\Exception\SerializationException;
@@ -54,9 +55,10 @@ final class DatabaseQueue {
         'updated_at',
     ];
 
+
     private \PDO $connection;
     private QueueConfiguration $configuration;
-    private DatabasePlatform $platform;
+    private AbstractDatabasePlatform $platform;
     private LoggerInterface $logger;
     private AttachmentBlobStore $attachmentBlobStore;
 
@@ -67,7 +69,13 @@ final class DatabaseQueue {
     ) {
         $this->connection = $connection;
         $this->configuration = $configuration ?? new QueueConfiguration();
-        $this->platform = DatabasePlatformResolver::resolve($this->connection);
+        $platform = DatabasePlatformResolver::resolve($this->connection);
+
+        if (!$platform instanceof AbstractDatabasePlatform) {
+            throw new ConfigurationException('Unsupported database platform implementation.');
+        }
+
+        $this->platform = $platform;
         $this->platform->validateConfiguration($this->configuration);
         $this->logger = $logger ?? new NullLogger();
         $this->attachmentBlobStore = new AttachmentBlobStore($this->connection, $this->configuration);
@@ -697,7 +705,7 @@ SQL,
     }
 
     private function formatDateTime(\DateTimeInterface $dateTime): string {
-        return $dateTime->format('Y-m-d H:i:sP');
+        return $this->platform->formatDateTime($dateTime);
     }
 
     private function currentTimestamp(): \DateTimeImmutable {

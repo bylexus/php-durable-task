@@ -6,6 +6,7 @@ namespace ByLexus\TaskRunner\Queue;
 
 use ByLexus\TaskRunner\Exception\ConfigurationException;
 use ByLexus\TaskRunner\Exception\QueueException;
+use ByLexus\TaskRunner\Queue\Db\AbstractDatabasePlatform;
 use ByLexus\TaskRunner\Queue\Db\DatabasePlatform;
 use ByLexus\TaskRunner\Queue\Db\DatabasePlatformResolver;
 use ByLexus\TaskRunner\Exception\SerializationException;
@@ -23,7 +24,7 @@ use PDO;
 final class AttachmentBlobStore {
     private PDO $connection;
     private QueueConfiguration $configuration;
-    private DatabasePlatform $platform;
+    private AbstractDatabasePlatform $platform;
 
     public function __construct(
         PDO $connection,
@@ -31,7 +32,13 @@ final class AttachmentBlobStore {
     ) {
         $this->connection = $connection;
         $this->configuration = $configuration ?? new QueueConfiguration();
-        $this->platform = DatabasePlatformResolver::resolve($this->connection);
+        $platform = DatabasePlatformResolver::resolve($this->connection);
+
+        if (!$platform instanceof AbstractDatabasePlatform) {
+            throw new ConfigurationException('Unsupported database platform implementation.');
+        }
+
+        $this->platform = $platform;
         $this->platform->validateConfiguration($this->configuration);
     }
 
@@ -51,7 +58,7 @@ final class AttachmentBlobStore {
         $statement->bindValue('content', $content, PDO::PARAM_LOB);
         $statement->bindValue('size_bytes', $sizeBytes, PDO::PARAM_INT);
         $statement->bindValue('sha256', $sha256, PDO::PARAM_STR);
-        $statement->bindValue('created_at', $this->currentTimestamp()->format('Y-m-d H:i:sP'), PDO::PARAM_STR);
+        $statement->bindValue('created_at', $this->platform->formatDateTime($this->currentTimestamp()), PDO::PARAM_STR);
         $statement->execute();
 
         if ($this->platform->supportsInsertReturning()) {

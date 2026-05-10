@@ -53,14 +53,14 @@
 
 - [x] Refactor `AttachmentBlobStore` to use the shared database platform helpers.
 - [x] Remove duplicated identifier and schema handling from the blob store.
-- [ ] Verify file attachment round-tripping still works unchanged across supported backends.
+- [x] Verify file attachment round-tripping still works unchanged across supported backends.
 
 ### 8. Public API Integration
 
 - [x] Update `Task`, `Runner`, and `QueueContext` to use the renamed queue abstraction.
 - [x] Keep `QueueContext` as the main public entry point for enqueueing, runner creation, and schema helpers.
-- [ ] Update README and examples to describe PostgreSQL notifications versus poll-only backends.
-- [ ] Update package requirements and docs to list PostgreSQL, MySQL 8+, MariaDB 10.6+, and SQLite support.
+- [x] Update README and examples to describe PostgreSQL notifications versus poll-only backends.
+- [x] Update package requirements and docs to list PostgreSQL, MySQL 8+, MariaDB 10.6+, and SQLite support.
 
 ### 9. Testing
 

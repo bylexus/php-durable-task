@@ -9,6 +9,8 @@ use ByLexus\TaskRunner\Queue\QueueConfiguration;
 interface DatabasePlatform {
     public function getName(): string;
 
+    public function formatDateTime(\DateTimeInterface $dateTime): string;
+
     public function supportsNotifications(): bool;
 
     public function supportsForUpdate(): bool;

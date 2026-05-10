@@ -10,6 +10,8 @@ require dirname(__DIR__) . '/vendor/autoload.php';
 require_once __DIR__ . '/ImportUserProfileTask.php';
 
 // Runner and producer must point at the same queue table and database.
+// PostgreSQL enables LISTEN / NOTIFY wakeups for runLoop(); MySQL, MariaDB,
+// and SQLite use the same worker flow but poll between claim attempts.
 $dsn = getenv('PHP_TR_DSN') ?: 'pgsql:host=127.0.0.1;port=5432;dbname=php_tr_test';
 $user = getenv('PHP_TR_DB_USER') ?: 'postgres';
 $password = getenv('PHP_TR_DB_PASS') ?: 'postgres';
@@ -34,6 +36,7 @@ $runner = new Runner(
 
 if ($mode === 'loop') {
     // Long-running mode is what you would usually supervise as a worker process.
+    // PostgreSQL waits on notifications here; other supported backends poll.
     $runner->runLoop();
 
     exit(0);

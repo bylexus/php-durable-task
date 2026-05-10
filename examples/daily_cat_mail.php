@@ -10,11 +10,13 @@ require_once(__DIR__ . '/DailyCatTask.php');
 require_once(__DIR__ . '/ExampleServiceContainer.php');
 
 
-$conn = new PDO("pgsql:host=127.0.0.1;port=5432;dbname=tr_test", 'postgres', 'postgres');
-$qc = new QueueConfiguration(schemaName: 'phptr');
+// $conn = new PDO("pgsql:host=127.0.0.1;port=5432;dbname=tr_test", 'postgres', 'postgres');
+// $qc = new QueueConfiguration(schemaName: 'phptr');
 // $conn = new PDO("mysql:host=127.0.0.1;port=3306;dbname=tr_test", 'phptr', 'phptr');
-// $conn = new PDO("sqlite:sqlite-test.db");
 // $qc = new QueueConfiguration(schemaName: 'tr_test');
+$conn = new PDO("mysql:host=127.0.0.1;port=3307;dbname=tr_test", 'phptr', 'phptr');
+$qc = new QueueConfiguration(schemaName: 'tr_test');
+// $conn = new PDO("sqlite:sqlite-test.db");
 // $qc = new QueueConfiguration();
 $sm = new SchemaManager($conn, $qc);
 $sm->bootstrap();

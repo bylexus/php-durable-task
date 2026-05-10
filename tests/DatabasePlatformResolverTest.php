@@ -35,6 +35,18 @@ final class DatabasePlatformResolverTest extends TestCase
         self::assertFalse($platform->supportsNotifications());
     }
 
+    public function testPlatformsFormatTimestampsForTheirColumnTypes(): void {
+        $timestamp = new \DateTimeImmutable('2026-05-10 12:56:31.123456', new \DateTimeZone('UTC'));
+
+        $mysqlPlatform = DatabasePlatformResolver::resolve($this->mockPdo('mysql', '8.4.5'));
+        $mariadbPlatform = DatabasePlatformResolver::resolve($this->mockPdo('mysql', '10.11.11-MariaDB'));
+        $postgresPlatform = DatabasePlatformResolver::resolve($this->mockPdo('pgsql'));
+
+        self::assertSame('2026-05-10 12:56:31.123456', $mysqlPlatform->formatDateTime($timestamp));
+        self::assertSame('2026-05-10 12:56:31.123456', $mariadbPlatform->formatDateTime($timestamp));
+        self::assertSame('2026-05-10 12:56:31.123456+00:00', $postgresPlatform->formatDateTime($timestamp));
+    }
+
     public function testResolverDetectsSqliteDriver(): void {
         $platform = DatabasePlatformResolver::resolve($this->mockPdo('sqlite'));
 

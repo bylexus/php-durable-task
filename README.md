@@ -22,8 +22,8 @@ This README is written for experienced PHP developers who want to integrate the 
 - `ext-pdo`
 - One of the supported PDO backends:
     - PostgreSQL
-    - MySQL
-    - MariaDB
+    - MySQL >= 8.0
+    - MariaDB >= 10.6
     - SQLite
 - Autoloadable task and step classes in every process that enqueues or runs work
 
@@ -608,6 +608,8 @@ Logging is PSR-3 based.
 The example container in [examples/ExampleServiceContainer.php](examples/ExampleServiceContainer.php) and [examples/FrameworkDemoContainer.php](examples/FrameworkDemoContainer.php) shows the intended shape.
 
 ## Examples
+
+Worker examples default to PostgreSQL DSNs. That gives `runLoop()` workers `LISTEN` / `NOTIFY` wakeups. If you point the same examples at MySQL, MariaDB, or SQLite, they still work, but long-running workers fall back to polling between claim attempts.
 
 ### Minimal quickstart
 

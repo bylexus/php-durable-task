@@ -11,6 +11,10 @@ abstract class AbstractDatabasePlatform implements DatabasePlatform {
         return false;
     }
 
+    public function formatDateTime(\DateTimeInterface $dateTime): string {
+        return $dateTime->format('Y-m-d H:i:s.uP');
+    }
+
     public function supportsForUpdate(): bool {
         return true;
     }

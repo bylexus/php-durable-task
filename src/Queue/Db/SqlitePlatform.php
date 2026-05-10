@@ -12,6 +12,12 @@ final class SqlitePlatform extends AbstractDatabasePlatform {
         return 'sqlite';
     }
 
+    public function formatDateTime(\DateTimeInterface $dateTime): string {
+        return \DateTimeImmutable::createFromInterface($dateTime)
+            ->setTimezone(new \DateTimeZone('UTC'))
+            ->format('Y-m-d H:i:s.u');
+    }
+
     public function supportsForUpdate(): bool {
         return false;
     }
