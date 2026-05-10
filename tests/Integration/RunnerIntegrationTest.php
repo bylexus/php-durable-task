@@ -14,9 +14,9 @@ use ByLexus\TaskRunner\Queue\SchemaManager;
 use ByLexus\TaskRunner\Runner;
 use ByLexus\TaskRunner\RunnerConfiguration;
 use ByLexus\TaskRunner\Task;
-use ByLexus\TaskRunner\Tests\Fixture\GracefulShutdownTaskFixture;
 use ByLexus\TaskRunner\Tests\Fixture\ConstructorInjectedServiceFixture;
 use ByLexus\TaskRunner\Tests\Fixture\ConstructorInjectedTaskFixture;
+use ByLexus\TaskRunner\Tests\Fixture\SignalControlledShutdownTaskFixture;
 use ByLexus\TaskRunner\Tests\Fixture\AttachmentRoundtripTaskFixture;
 use ByLexus\TaskRunner\Tests\Fixture\CancellingTaskFixture;
 use ByLexus\TaskRunner\Tests\Fixture\PayloadHandoffTaskFixture;
@@ -757,14 +757,18 @@ final class RunnerIntegrationTest extends TestCase
         $pdo = PostgresIntegrationConnection::requirePdo($this);
         $tableName = PostgresIntegrationConnection::uniqueTableName();
         $markerPath = sprintf('%s/%s.stop', sys_get_temp_dir(), $tableName);
+        $startedPath = sprintf('%s/%s.started', sys_get_temp_dir(), $tableName);
+        $releasePath = sprintf('%s/%s.release', sys_get_temp_dir(), $tableName);
         @unlink($markerPath);
+        @unlink($startedPath);
+        @unlink($releasePath);
 
         try {
             $configuration = new QueueConfiguration($tableName);
             $schemaManager = new SchemaManager($pdo, $configuration);
             $schemaManager->bootstrap();
 
-            $task = new GracefulShutdownTaskFixture();
+            $task = new SignalControlledShutdownTaskFixture();
             $record = $task->enqueue($pdo, configuration: $configuration);
 
             self::assertNotNull($record->taskId);
@@ -778,14 +782,35 @@ final class RunnerIntegrationTest extends TestCase
                 ],
                 $pipes,
                 dirname(__DIR__, 2),
+                [
+                    'TEST_DATABASE_DSN' => (string) getenv('TEST_DATABASE_DSN'),
+                    'TEST_DATABASE_USER' => (string) getenv('TEST_DATABASE_USER'),
+                    'TEST_DATABASE_PASSWORD' => (string) getenv('TEST_DATABASE_PASSWORD'),
+                    'PHP_TR_SIGNAL_STARTED_PATH' => $startedPath,
+                    'PHP_TR_SIGNAL_RELEASE_PATH' => $releasePath,
+                ],
             );
 
             self::assertIsResource($process);
 
             try {
                 $this->waitForTaskStatus($pdo, $tableName, (int) $record->taskId, TaskStatus::RUNNING->value, 20);
+                $this->waitForFile($startedPath, 30);
 
                 proc_terminate($process, SIGTERM);
+
+                $this->waitForTaskStatus($pdo, $tableName, (int) $record->taskId, TaskStatus::FAILED->value, 20);
+
+                $failedRow = $this->fetchTaskRow($pdo, $tableName, (int) $record->taskId);
+
+                self::assertSame(TaskStatus::FAILED->value, $failedRow['task_status']);
+                self::assertSame(StepStatus::FAILED->value, $failedRow['step_status']);
+                self::assertSame(
+                    'Runner stop was requested before the current step completed. Signal: SIGTERM.',
+                    $failedRow['last_error_message'],
+                );
+
+                file_put_contents($releasePath, "release\n");
 
                 $this->waitForTaskStatus($pdo, $tableName, (int) $record->taskId, TaskStatus::SUCCEEDED->value, 30);
                 $this->waitForFile($markerPath, 30);
@@ -810,6 +835,8 @@ final class RunnerIntegrationTest extends TestCase
             }
         } finally {
             @unlink($markerPath);
+            @unlink($startedPath);
+            @unlink($releasePath);
             PostgresIntegrationConnection::dropTableIfExists($pdo, $tableName);
         }
     }
@@ -818,14 +845,18 @@ final class RunnerIntegrationTest extends TestCase
         $pdo = PostgresIntegrationConnection::requirePdo($this);
         $tableName = PostgresIntegrationConnection::uniqueTableName();
         $markerPath = sprintf('%s/%s.stop', sys_get_temp_dir(), $tableName);
+        $startedPath = sprintf('%s/%s.started', sys_get_temp_dir(), $tableName);
+        $releasePath = sprintf('%s/%s.release', sys_get_temp_dir(), $tableName);
         @unlink($markerPath);
+        @unlink($startedPath);
+        @unlink($releasePath);
 
         try {
             $configuration = new QueueConfiguration($tableName);
             $schemaManager = new SchemaManager($pdo, $configuration);
             $schemaManager->bootstrap();
 
-            $gracefulTask = new GracefulShutdownTaskFixture();
+            $gracefulTask = new SignalControlledShutdownTaskFixture();
             $gracefulRecord = $gracefulTask->enqueue($pdo, configuration: $configuration);
             $followUpTask = new QueueWorkflowTaskFixture();
             $followUpRecord = $followUpTask->enqueue($pdo, configuration: $configuration);
@@ -842,6 +873,13 @@ final class RunnerIntegrationTest extends TestCase
                 ],
                 $pipes,
                 dirname(__DIR__, 2),
+                [
+                    'TEST_DATABASE_DSN' => (string) getenv('TEST_DATABASE_DSN'),
+                    'TEST_DATABASE_USER' => (string) getenv('TEST_DATABASE_USER'),
+                    'TEST_DATABASE_PASSWORD' => (string) getenv('TEST_DATABASE_PASSWORD'),
+                    'PHP_TR_SIGNAL_STARTED_PATH' => $startedPath,
+                    'PHP_TR_SIGNAL_RELEASE_PATH' => $releasePath,
+                ],
             );
 
             self::assertIsResource($process);
@@ -854,8 +892,28 @@ final class RunnerIntegrationTest extends TestCase
                     TaskStatus::RUNNING->value,
                     20,
                 );
+                $this->waitForFile($startedPath, 30);
 
                 proc_terminate($process, SIGTERM);
+
+                $this->waitForTaskStatus(
+                    $pdo,
+                    $tableName,
+                    (int) $gracefulRecord->taskId,
+                    TaskStatus::FAILED->value,
+                    20,
+                );
+
+                $failedGracefulRow = $this->fetchTaskRow($pdo, $tableName, (int) $gracefulRecord->taskId);
+
+                self::assertSame(TaskStatus::FAILED->value, $failedGracefulRow['task_status']);
+                self::assertSame(StepStatus::FAILED->value, $failedGracefulRow['step_status']);
+                self::assertSame(
+                    'Runner stop was requested before the current step completed. Signal: SIGTERM.',
+                    $failedGracefulRow['last_error_message'],
+                );
+
+                file_put_contents($releasePath, "release\n");
 
                 $this->waitForTaskStatus(
                     $pdo,
@@ -889,6 +947,8 @@ final class RunnerIntegrationTest extends TestCase
             }
         } finally {
             @unlink($markerPath);
+            @unlink($startedPath);
+            @unlink($releasePath);
             PostgresIntegrationConnection::dropTableIfExists($pdo, $tableName);
         }
     }

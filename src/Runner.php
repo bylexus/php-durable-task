@@ -32,6 +32,8 @@ use Psr\Log\NullLogger;
 class Runner {
     private const EXPIRED_QUEUE_CLEANUP_INTERVAL_SECONDS = 10;
     private const MAX_RUNTIME_EXCEEDED_MESSAGE = 'Step exceeded its configured maximum runtime.';
+    private const STOP_REQUESTED_FAILURE_CODE = 499;
+    private const STOP_REQUESTED_FAILURE_MESSAGE = 'Runner stop was requested before the current step completed.';
 
     private \PDO $connection;
     private QueueConfiguration $queueConfiguration;
@@ -152,6 +154,16 @@ class Runner {
             'runnerId' => $this->runnerConfiguration->getRunnerId(),
             'signal' => $signal,
         ]);
+
+        $failedClaims = $this->failClaimedRunningTasksForStopRequest($signalName);
+
+        if ($failedClaims > 0) {
+            $this->logger->warning('Runner marked claimed running tasks as failed after stop request.', [
+                'runnerId' => $this->runnerConfiguration->getRunnerId(),
+                'signal' => $signal,
+                'failedClaims' => $failedClaims,
+            ]);
+        }
 
         if (defined('STDERR')) {
             fwrite(STDERR, $message . PHP_EOL);
@@ -500,6 +512,79 @@ SQL,
         }
     }
 
+    private function failClaimedRunningTasksForStopRequest(string $signalName): int {
+        if ($this->connection->inTransaction()) {
+            $this->logger->warning('Runner skipped stop-request failure marking during active transaction.', [
+                'runnerId' => $this->runnerConfiguration->getRunnerId(),
+                'signal' => $signalName,
+            ]);
+
+            return 0;
+        }
+
+        $this->connection->beginTransaction();
+
+        try {
+            $statement = $this->connection->prepare(
+                sprintf(
+                    <<<'SQL'
+SELECT *
+FROM %s
+WHERE task_status = :task_status
+  AND step_status = :step_status
+  AND claimed_by = :claimed_by
+FOR UPDATE SKIP LOCKED
+SQL,
+                    $this->quotedQueueTableName(),
+                ),
+            );
+            $statement->execute([
+                'task_status' => TaskStatus::RUNNING->value,
+                'step_status' => StepStatus::RUNNING->value,
+                'claimed_by' => $this->runnerConfiguration->getRunnerId(),
+            ]);
+
+            $failedClaims = 0;
+
+            while (true) {
+                $row = $statement->fetch(\PDO::FETCH_ASSOC);
+
+                if (!is_array($row)) {
+                    break;
+                }
+
+                $record = QueueRecord::fromDatabaseRow($row);
+
+                if ($record->taskId === null) {
+                    continue;
+                }
+
+                $this->queue->update(
+                    $record->taskId,
+                    $this->changesForStopRequestedRunningTask($record, $signalName),
+                );
+                $failedClaims++;
+            }
+
+            $this->connection->commit();
+
+            return $failedClaims;
+        } catch (\Throwable $throwable) {
+            if ($this->connection->inTransaction()) {
+                $this->connection->rollBack();
+            }
+
+            $this->logger->error('Runner failed while marking claimed running tasks after stop request.', [
+                'runnerId' => $this->runnerConfiguration->getRunnerId(),
+                'signal' => $signalName,
+                'exceptionClass' => $throwable::class,
+                'errorCode' => (int) $throwable->getCode(),
+            ]);
+
+            return 0;
+        }
+    }
+
     private function resolveExecutionResult(
         QueueRecord $record,
         Task $task,
@@ -805,6 +890,37 @@ SQL,
                 'status' => StepStatus::FAILED->value,
                 'meta' => ['timedOut' => true],
                 'message' => self::MAX_RUNTIME_EXCEEDED_MESSAGE,
+            ],
+            'error_json' => $this->normalizeErrorInfo($errorInfo),
+            'last_error_code' => (string) $errorInfo->getCode(),
+            'last_error_message' => $errorInfo->getMessage(),
+            'claimed_at' => null,
+            'claimed_by' => null,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function changesForStopRequestedRunningTask(QueueRecord $record, string $signalName): array {
+        $now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+        $message = sprintf('%s Signal: %s.', self::STOP_REQUESTED_FAILURE_MESSAGE, $signalName);
+        $errorInfo = new ErrorInfo(
+            self::STOP_REQUESTED_FAILURE_CODE,
+            $message,
+            ['signal' => $signalName, 'stopRequested' => true],
+        );
+
+        return [
+            'task_status' => TaskStatus::FAILED,
+            'step_status' => StepStatus::FAILED,
+            'task_finished_at' => $now,
+            'step_finished_at' => $now,
+            'cleanup_at' => $now->add($this->resolveCleanupAfterInterval($record)),
+            'result_json' => [
+                'status' => StepStatus::FAILED->value,
+                'meta' => ['signal' => $signalName, 'stopRequested' => true],
+                'message' => $message,
             ],
             'error_json' => $this->normalizeErrorInfo($errorInfo),
             'last_error_code' => (string) $errorInfo->getCode(),
