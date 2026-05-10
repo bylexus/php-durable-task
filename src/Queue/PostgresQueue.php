@@ -73,6 +73,26 @@ final class PostgresQueue {
         return $this->attachmentBlobStore;
     }
 
+    public function getConnection(): \PDO {
+        return $this->connection;
+    }
+
+    public function get(int $taskId, bool $forUpdate = false): QueueRecord {
+        $statement = $this->connection->prepare(
+            sprintf(
+                'SELECT * FROM %s WHERE task_id = :task_id%s',
+                $this->quotedTableName(),
+                $forUpdate ? ' FOR UPDATE' : '',
+            ),
+        );
+        $statement->execute(['task_id' => $taskId]);
+
+        return $this->fetchRecordFromStatement(
+            $statement,
+            sprintf('Queue row %d could not be loaded.', $taskId),
+        );
+    }
+
     public function enqueue(Task $task, Step $firstStep, int $priority = Task::PRIO_NORMAL): QueueRecord {
         $now = $this->currentTimestamp();
         $startedTransaction = false;

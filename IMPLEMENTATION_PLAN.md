@@ -729,7 +729,7 @@ V1 should not attempt in-step interruption. Runtime enforcement is boundary-base
 
 ### Cancellation
 
-Cancellation should be durable and explicit:
+Cancellation should be explicit:
 
 - Store `cancel_requested` and `cancel_reason`.
 - Check cancellation before executing a claimed step.
@@ -917,7 +917,6 @@ V1 is ready when all of the following are true:
 - Nested mutations on materialized payload objects survive later reads and persistence.
 - The queue schema can be created on an empty PostgreSQL database through explicit bootstrap, and the runner may perform a one-time startup bootstrap.
 - One or more runner processes can safely claim and execute tasks.
-- Task state remains durable across runner restarts.
 - A failed step is retried according to metadata.
 - Exhausted retries result in terminal task failure.
 - Cancellation is persisted and stops further workflow progression.

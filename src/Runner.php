@@ -232,6 +232,7 @@ class Runner {
                 $this->runnerConfiguration->getContainer(),
                 $this->logger,
                 $this->queue->getAttachmentBlobStore(),
+                $this->queue,
             );
             $step = $task->actualStep();
 
@@ -276,20 +277,28 @@ class Runner {
         $this->connection->beginTransaction();
 
         try {
+            $currentRecord = $this->queue->get((int) $record->taskId, true);
+
+            if ($this->isCancellationRequested($currentRecord)) {
+                $result = $this->cancelledResultFromRecord($currentRecord);
+            }
+
             $task->updateStep($step, $result);
             $nextStep = null;
             $retryMode = $stepMetadata->getRetryMode();
             $retries = $stepMetadata->getRetries();
             $retryDelay = $stepMetadata->getRetryDelay();
 
-            try {
-                $nextStep = $task->nextStep($step);
-            } catch (\Throwable $throwable) {
-                $result = $this->failedResultFromNextStepException($task, $step, $throwable);
-                $task->updateStep($step, $result);
-                $retryMode = RetryMode::FAIL;
-                $retries = 0;
-                $retryDelay = new \DateInterval('PT0S');
+            if (!$this->isCancellationRequested($currentRecord)) {
+                try {
+                    $nextStep = $task->nextStep($step);
+                } catch (\Throwable $throwable) {
+                    $result = $this->failedResultFromNextStepException($task, $step, $throwable);
+                    $task->updateStep($step, $result);
+                    $retryMode = RetryMode::FAIL;
+                    $retries = 0;
+                    $retryDelay = new \DateInterval('PT0S');
+                }
             }
 
             if ($nextStep !== null) {
@@ -303,7 +312,7 @@ class Runner {
             }
 
             $changes = $this->changesForResult(
-                $record,
+                $currentRecord,
                 $task,
                 $result,
                 $nextStep,
@@ -432,6 +441,27 @@ class Runner {
         }
 
         return $result;
+    }
+
+    private function isCancellationRequested(QueueRecord $record): bool {
+        return $record->cancelRequested || $record->taskStatus === TaskStatus::CANCELLED->value;
+    }
+
+    private function cancelledResultFromRecord(QueueRecord $record): StepResult {
+        $message = $record->cancelReason ?? 'Cancellation requested.';
+
+        $this->logger->warning('Runner detected task cancellation request.', [
+            'runnerId' => $this->runnerConfiguration->getRunnerId(),
+            'taskId' => $record->taskId,
+            'taskClass' => $record->taskClass,
+            'stepClass' => $record->stepClass,
+        ]);
+
+        return StepResult::cancelled(
+            errorInfo: new ErrorInfo(499, $message),
+            meta: ['requested' => true],
+            message: $message,
+        );
     }
 
     private function failedResultFromNextStepException(Task $task, Step $step, \Throwable $throwable): StepResult {

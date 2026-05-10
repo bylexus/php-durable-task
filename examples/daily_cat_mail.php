@@ -10,7 +10,7 @@ require_once(__DIR__ . '/DailyCatTask.php');
 require_once(__DIR__ . '/ExampleServiceContainer.php');
 
 
-$conn = new PDO("pgsql:host=127.0.0.1;port=5432;dbname=php_tr_test", 'postgres', 'postgres');
+$conn = new PDO("pgsql:host=127.0.0.1;port=5432;dbname=tr_test", 'postgres', 'postgres');
 $qc = new QueueConfiguration(schemaName: 'phptr');
 $sm = new SchemaManager($conn, $qc);
 $sm->bootstrap();

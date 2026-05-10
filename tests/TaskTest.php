@@ -43,6 +43,16 @@ final class TaskTest extends TestCase
         self::assertTrue($logger->hasRecord('debug', 'Step created.'));
     }
 
+    public function testCancelMarksDetachedTaskAsCancelledInMemory(): void {
+        $task = new QueueWorkflowTaskFixture();
+
+        $task->cancel('Cancelled locally.');
+
+        self::assertTrue($task->isCancelRequested());
+        self::assertSame('Cancelled locally.', $task->getCancelReason());
+        self::assertSame(TaskStatus::CANCELLED, $task->getStatus());
+    }
+
     public function testTaskCanBeReconstitutedFromQueueRecord(): void {
         $record = new QueueRecord(
             42,

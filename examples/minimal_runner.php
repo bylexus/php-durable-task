@@ -14,7 +14,7 @@ $runnerConfig = new RunnerConfiguration(
     container: $container,
     logger: $container->get(LoggerInterface::class)
 );
-$conn = new PDO("pgsql:host=127.0.0.1;port=5432;dbname=php_tr_test", 'postgres', 'postgres');
+$conn = new PDO("pgsql:host=127.0.0.1;port=5432;dbname=tr_test", 'postgres', 'postgres');
 $runner = new Runner(connection: $conn, runnerConfiguration: $runnerConfig, queueConfiguration: $qc);
 
 // $runner->runLoop();

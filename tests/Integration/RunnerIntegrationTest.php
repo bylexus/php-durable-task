@@ -18,6 +18,7 @@ use ByLexus\TaskRunner\Tests\Fixture\GracefulShutdownTaskFixture;
 use ByLexus\TaskRunner\Tests\Fixture\ConstructorInjectedServiceFixture;
 use ByLexus\TaskRunner\Tests\Fixture\ConstructorInjectedTaskFixture;
 use ByLexus\TaskRunner\Tests\Fixture\AttachmentRoundtripTaskFixture;
+use ByLexus\TaskRunner\Tests\Fixture\CancellingTaskFixture;
 use ByLexus\TaskRunner\Tests\Fixture\PayloadHandoffTaskFixture;
 use ByLexus\TaskRunner\Tests\Fixture\PayloadMutationTaskFixture;
 use ByLexus\TaskRunner\Tests\Fixture\RetainedQueueWorkflowTaskFixture;
@@ -858,13 +859,7 @@ final class RunnerIntegrationTest extends TestCase
 
             self::assertNotNull($record->taskId);
 
-            $queue = new PostgresQueue($pdo, $configuration);
-            $this->updateTask(
-                $pdo,
-                $queue,
-                (int) $record->taskId,
-                ['cancel_requested' => true, 'cancel_reason' => 'Cancelled before execution.'],
-            );
+            $task->cancel('Cancelled before execution.');
 
             $runner = new Runner(
                 $pdo,
@@ -872,7 +867,7 @@ final class RunnerIntegrationTest extends TestCase
                 new RunnerConfiguration('runner-cancelled'),
             );
 
-            self::assertSame(1, $runner->runSingle());
+            self::assertSame(0, $runner->runSingle());
 
             $row = $this->fetchTaskRow($pdo, $tableName, (int) $record->taskId);
 
@@ -885,6 +880,49 @@ final class RunnerIntegrationTest extends TestCase
             );
             self::assertSame('499', $row['last_error_code']);
             self::assertSame('Cancelled before execution.', $row['last_error_message']);
+        } finally {
+            PostgresIntegrationConnection::dropTableIfExists($pdo, $tableName);
+        }
+    }
+
+    public function testRunSingleKeepsTaskCancelledWhenStepCancelsDuringExecution(): void {
+        $pdo = PostgresIntegrationConnection::requirePdo($this);
+        $tableName = PostgresIntegrationConnection::uniqueTableName();
+
+        try {
+            $configuration = new QueueConfiguration($tableName);
+            $schemaManager = new SchemaManager($pdo, $configuration);
+            $schemaManager->bootstrap();
+
+            $task = new CancellingTaskFixture();
+            $record = $task->enqueue($pdo, configuration: $configuration);
+
+            self::assertNotNull($record->taskId);
+
+            $runner = new Runner(
+                $pdo,
+                $configuration,
+                new RunnerConfiguration('runner-cancel-during-execution'),
+            );
+
+            self::assertSame(1, $runner->runSingle());
+
+            $row = $this->fetchTaskRow($pdo, $tableName, (int) $record->taskId);
+
+            self::assertSame(TaskStatus::CANCELLED->value, $row['task_status']);
+            self::assertSame(StepStatus::CANCELLED->value, $row['step_status']);
+            self::assertSame(CancellingTaskFixture::class, $row['task_class']);
+            self::assertSame(
+                \ByLexus\TaskRunner\Tests\Fixture\CancellingStepFixture::class,
+                $row['step_class'],
+            );
+            self::assertSame(true, $row['payload_json']['cancelledDuringExecution']);
+            self::assertEquals(
+                ['status' => 'cancelled', 'meta' => ['requested' => true], 'message' => 'Cancelled during execution.'],
+                $row['result_json'],
+            );
+            self::assertSame('499', $row['last_error_code']);
+            self::assertSame('Cancelled during execution.', $row['last_error_message']);
         } finally {
             PostgresIntegrationConnection::dropTableIfExists($pdo, $tableName);
         }

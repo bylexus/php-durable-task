@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace ByLexus\TaskRunner;
 
+use ByLexus\TaskRunner\Attribute\CleanupAfter;
+use ByLexus\TaskRunner\Enum\StepStatus;
 use ByLexus\TaskRunner\Enum\TaskStatus;
 use ByLexus\TaskRunner\Exception\ConfigurationException;
 use ByLexus\TaskRunner\Metadata\MetadataResolver;
@@ -48,6 +50,7 @@ abstract class Task {
     private bool $cancelRequested = false;
     private ?string $cancelReason = null;
     private ?Step $actualStep = null;
+    private ?PostgresQueue $queue = null;
 
     public function __construct(?LoggerInterface $logger = null) {
         if ($logger !== null) {
@@ -92,8 +95,42 @@ abstract class Task {
     }
 
     public function cancel(string $reason): void {
-        $this->cancelRequested = true;
-        $this->cancelReason = $reason;
+        if ($this->queue === null || $this->id === null) {
+            $this->cancelRequested = true;
+            $this->cancelReason = $reason;
+            $this->status = TaskStatus::CANCELLED;
+
+            return;
+        }
+
+        $connection = $this->queue->getConnection();
+        $startedTransaction = false;
+
+        if (!$connection->inTransaction()) {
+            $connection->beginTransaction();
+            $startedTransaction = true;
+        }
+
+        try {
+            $record = $this->queue->get($this->id, true);
+            $changes = $this->changesForCancellation($record, $reason);
+
+            if ($changes !== []) {
+                $record = $this->queue->update($this->id, $changes, true);
+            }
+
+            if ($startedTransaction) {
+                $connection->commit();
+            }
+
+            $this->applyCancelledRecord($record);
+        } catch (\Throwable $throwable) {
+            if ($startedTransaction && $connection->inTransaction()) {
+                $connection->rollBack();
+            }
+
+            throw $throwable;
+        }
     }
 
     public function isCancelRequested(): bool {
@@ -201,7 +238,7 @@ abstract class Task {
         $record = $queue->enqueue($this, $firstStep, $priority);
 
         $firstStep->hydrateFromQueueRecord($record);
-        $this->hydrateFromQueueRecord($record, $firstStep, $queue->getAttachmentBlobStore());
+        $this->hydrateFromQueueRecord($record, $firstStep, $queue->getAttachmentBlobStore(), $queue);
 
         return $record;
     }
@@ -224,6 +261,7 @@ abstract class Task {
         ?ContainerInterface $container = null,
         ?LoggerInterface $logger = null,
         ?AttachmentBlobStore $attachmentBlobStore = null,
+        ?PostgresQueue $queue = null,
     ): self {
         $task = ClassInstantiator::instantiate($record->taskClass, self::class, self::class, $container, $logger);
 
@@ -232,7 +270,7 @@ abstract class Task {
         }
 
         $actualStep = Step::fromQueueRecord($record, $container, $logger);
-        $task->hydrateFromQueueRecord($record, $actualStep, $attachmentBlobStore);
+        $task->hydrateFromQueueRecord($record, $actualStep, $attachmentBlobStore, $queue);
 
         return $task;
     }
@@ -243,6 +281,7 @@ abstract class Task {
         QueueRecord $record,
         ?Step $actualStep = null,
         ?AttachmentBlobStore $attachmentBlobStore = null,
+        ?PostgresQueue $queue = null,
     ): void {
         $this->id = $record->taskId;
         $this->status = TaskStatus::from($record->taskStatus);
@@ -256,6 +295,11 @@ abstract class Task {
         $this->cancelRequested = $record->cancelRequested;
         $this->cancelReason = $record->cancelReason;
         $this->actualStep = $actualStep;
+        $this->queue = $queue;
+
+        if ($this->actualStep !== null) {
+            $this->actualStep->hydrateFromQueueRecord($record);
+        }
 
         $this->logger?->debug('Task hydrated from queue record.', [
             'taskId' => $record->taskId,
@@ -269,6 +313,59 @@ abstract class Task {
 
     protected function setStoredPayload(mixed $payload, ?AttachmentBlobStore $attachmentBlobStore = null): void {
         $this->payload = PayloadNormalizer::hydrateStoredRoot($payload, $attachmentBlobStore);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function changesForCancellation(QueueRecord $record, string $reason): array {
+        $changes = [
+            'cancel_requested' => true,
+            'cancel_reason' => $reason,
+        ];
+
+        if (
+            $record->taskStatus === TaskStatus::SUCCEEDED->value
+            || $record->taskStatus === TaskStatus::FAILED->value
+        ) {
+            return [];
+        }
+
+        if ($record->taskStatus === TaskStatus::CANCELLED->value) {
+            return $changes;
+        }
+
+        $changes['task_status'] = TaskStatus::CANCELLED;
+
+        if (
+            $record->taskStatus === TaskStatus::RUNNING->value
+            || $record->stepStatus === StepStatus::RUNNING->value
+        ) {
+            return $changes;
+        }
+
+        $now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+
+        $changes['step_status'] = StepStatus::CANCELLED;
+        $changes['task_finished_at'] = $now;
+        $changes['step_finished_at'] = $now;
+        $changes['cleanup_at'] = $now->add($this->resolveCancellationCleanupAfter());
+        $changes['result_json'] = [
+            'status' => StepStatus::CANCELLED->value,
+            'meta' => ['requested' => true],
+            'message' => $reason,
+        ];
+        $changes['error_json'] = [
+            'code' => 499,
+            'message' => $reason,
+            'details' => [],
+        ];
+        $changes['last_error_code'] = '499';
+        $changes['last_error_message'] = $reason;
+        $changes['claimed_at'] = null;
+        $changes['claimed_by'] = null;
+
+        return $changes;
     }
 
     private static function assertValidPriority(int $priority): void {
@@ -294,5 +391,29 @@ abstract class Task {
         }
 
         return $this->payload;
+    }
+
+    private function resolveCancellationCleanupAfter(): \DateInterval {
+        try {
+            return (new MetadataResolver())->resolveTaskMetadata(static::class)->getUnsuccessfulCleanupAfter();
+        } catch (\Throwable) {
+            return new \DateInterval(CleanupAfter::DEFAULT_UNSUCCESSFUL_SPEC);
+        }
+    }
+
+    private function applyCancelledRecord(QueueRecord $record): void {
+        $this->status = TaskStatus::from($record->taskStatus);
+        $this->taskAttempt = $record->taskAttempt;
+        $this->priority = $record->priority;
+        $this->createdAt = $record->taskCreatedAt;
+        $this->startedAt = $record->taskStartedAt;
+        $this->finishedAt = $record->taskFinishedAt;
+        $this->cleanupAt = $record->cleanupAt;
+        $this->cancelRequested = $record->cancelRequested;
+        $this->cancelReason = $record->cancelReason;
+
+        if ($this->actualStep !== null) {
+            $this->actualStep->hydrateFromQueueRecord($record);
+        }
     }
 }
