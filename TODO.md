@@ -1,3 +1,4 @@
-# PHP TR TODO
+# php-tr TODO
 
-- fetch task, task list functions
+- github action to run tests with docker containers
+- publish as composer package on packagist.org

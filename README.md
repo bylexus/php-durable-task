@@ -49,7 +49,7 @@ all the needed dependencies:
 use ByLexus\TaskRunner\TaskEnvironment;
 use ByLexus\TaskRunner\Queue\QueueConfiguration;
 
-$context = new TaskEnvironment(
+$env = new TaskEnvironment(
     connection: getDBConn(), // get your PDO connection as usual
     queueConfiguration: new QueueConfiguration(schemaName: 'appschema'),
     // ...
@@ -57,21 +57,21 @@ $context = new TaskEnvironment(
 
 ```
 
-The context object will be used for all interaction with the Tasks / runner.
+The env object will be used for all interaction with the Tasks / runner.
 
 
 Create the DB objects automatically:
 
 ```php
 // Reuse the same TaskEnvironment for schema management, enqueueing, and runners.
-$context->getSchemaManager()->bootstrap();
+$env->getSchemaManager()->bootstrap();
 ```
 
 or by exporting the needed SQL through your own tooling:
 
 ```php
 
-$ddl = $context->getSchemaManager()->exportDdl();
+$ddl = $env->getSchemaManager()->exportDdl();
 
 // Dump, log, or feed $ddl into your migration tooling.
 ```
@@ -152,10 +152,10 @@ Now you're ready to dispatch the task:
 
 // The task owns the payload. Here we seed it before enqueueing the first step.
 $task = (new GreetingTask())->withName('Ada Lovelace');
-$context->enqueue($task);
+$env->enqueue($task);
 
 // Optional: lower numbers are picked first by runners.
-$context->enqueue($task, priority: Task::PRIO_HIGH);
+$env->enqueue($task, priority: Task::PRIO_HIGH);
 ```
 
 Tasks default to priority `3` (`Task::PRIO_NORMAL`). You can choose values from `1` to `5` using the built-in constants:
@@ -181,7 +181,7 @@ use ByLexus\TaskRunner\RunnerConfiguration;
 use Psr\Log\LoggerInterface;
 
 $queueConfiguration = new QueueConfiguration('app_background_jobs', 'background_jobs');
-$context = new TaskEnvironment(
+$env = new TaskEnvironment(
     connection: $pdo,
     queueConfiguration: $queueConfiguration,
     container: $container, // provide your PSR-11 compatible Dependency Injection container
@@ -189,7 +189,7 @@ $context = new TaskEnvironment(
     runnerConfiguration: new RunnerConfiguration(runnerId: 'app-worker-1'),
 );
 // A runner claims one queued row, hydrates the task and step, executes them, and persists the result.
-$runner = $context->createRunner();
+$runner = $env->createRunner();
 $runner->runLoop();
 ```
 
@@ -256,10 +256,10 @@ Each queued task row stores a numeric priority. Priority `1` is the highest prio
 use ByLexus\TaskRunner\TaskEnvironment;
 use ByLexus\TaskRunner\Task;
 
-$context = new TaskEnvironment($pdo);
+$env = new TaskEnvironment($pdo);
 $task = (new WelcomeTask())->withEmail('ada@example.com');
 
-$context->enqueue($task, priority: Task::PRIO_VERY_HIGH);
+$env->enqueue($task, priority: Task::PRIO_VERY_HIGH);
 ```
 
 This is useful when some background work should jump ahead of normal queue traffic without needing a separate queue table.
@@ -367,9 +367,9 @@ use ByLexus\TaskRunner\Queue\QueueConfiguration;
 use ByLexus\TaskRunner\TaskEnvironment;
 
 $queueConfiguration = new QueueConfiguration('app_background_jobs', 'background_jobs');
-$context = new TaskEnvironment($pdo, $queueConfiguration);
-$context->getSchemaManager()->bootstrap();
-$context->getSchemaManager()->validate();
+$env = new TaskEnvironment($pdo, $queueConfiguration);
+$env->getSchemaManager()->bootstrap();
+$env->getSchemaManager()->validate();
 ```
 
 This is the most predictable option in production. It creates the queue table if not present, and / or updates it.
@@ -382,12 +382,12 @@ The queue schema includes a `priority` column with default value `3`, so existin
 use ByLexus\TaskRunner\Queue\QueueConfiguration;
 use ByLexus\TaskRunner\TaskEnvironment;
 
-$context = new TaskEnvironment(
+$env = new TaskEnvironment(
     $pdo,
     new QueueConfiguration('custom_queue_table', 'background_jobs'),
 );
 
-$ddl = $context->getSchemaManager()->exportDdl();
+$ddl = $env->getSchemaManager()->exportDdl();
 ```
 
 This returns the exact DDL string for the configured queue table and backend resolved from your live PDO connection. The library does not ship a standalone dump script anymore; wiring the export into your migration or deployment tooling is your responsibility.
@@ -401,8 +401,8 @@ use ByLexus\TaskRunner\TaskEnvironment;
 $runnerConfiguration = new RunnerConfiguration(
     bootstrapSchemaOnStart: true,
 );
-$context = new TaskEnvironment($pdo, runnerConfiguration: $runnerConfiguration);
-$runner = $context->createRunner();
+$env = new TaskEnvironment($pdo, runnerConfiguration: $runnerConfiguration);
+$runner = $env->createRunner();
 ```
 
 This is useful for local development or controlled deployments. It is optional and disabled by default.
@@ -418,9 +418,9 @@ use ByLexus\TaskRunner\RunnerConfiguration;
 
 $queueConfiguration = new QueueConfiguration('app_background_jobs');
 
-$context = new TaskEnvironment($pdo, $queueConfiguration, runnerConfiguration: $runnerConfiguration);
-$context->enqueue($task);
-$context->createRunner()->runLoop();
+$env = new TaskEnvironment($pdo, $queueConfiguration, runnerConfiguration: $runnerConfiguration);
+$env->enqueue($task);
+$env->createRunner()->runLoop();
 ```
 
 The same `QueueConfiguration` must be used consistently by producers, runners, and schema bootstrap.
@@ -444,8 +444,8 @@ Backend-specific behavior:
 ### Single pass worker
 
 ```php
-$context = new TaskEnvironment($pdo);
-$runner = $context->createRunner();
+$env = new TaskEnvironment($pdo);
+$runner = $env->createRunner();
 $processed = $runner->runSingle();
 ```
 
@@ -456,7 +456,7 @@ $processed = $runner->runSingle();
 Start a long-running runner using the `runLoop()` function. This is best used in conjunction with a process manager like `systemd` or `supervisord`.
 
 ```php
-$context = new TaskEnvironment(
+$env = new TaskEnvironment(
     $pdo,
     runnerConfiguration: new RunnerConfiguration(
         runnerId: 'billing-worker-1',
@@ -464,7 +464,7 @@ $context = new TaskEnvironment(
     ),
 );
 
-$runner = $context->createRunner();
+$runner = $env->createRunner();
 
 $runner->runLoop();
 ```
@@ -505,7 +505,7 @@ use Psr\Log\LoggerInterface;
 
 $container = $app->getContainer();
 
-$context = new TaskEnvironment(
+$env = new TaskEnvironment(
     $pdo,
     null,
     $container,
@@ -513,7 +513,7 @@ $context = new TaskEnvironment(
     new RunnerConfiguration(bootstrapSchemaOnStart: false),
 );
 
-$runner = $context->createRunner();
+$runner = $env->createRunner();
 
 $runner->runLoop();
 ```
