@@ -9,7 +9,7 @@ use ByLexus\TaskRunner\Enum\RetryMode as RetryModeEnum;
 /**
  * Declares retry behavior.
  *
- * Defines the retry strategy for a task or step through a PHP attribute.
+ * Defines the retry strategy for a step through a PHP attribute.
  *
  * This file is part of bylexus/php-tr
  *

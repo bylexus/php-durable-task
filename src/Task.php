@@ -41,7 +41,6 @@ abstract class Task {
 
     private ?int $id = null;
     private ?TaskStatus $status = null;
-    private int $taskAttempt = 0;
     private int $priority = self::PRIO_NORMAL;
     private ?\DateTimeImmutable $createdAt = null;
     private ?\DateTimeImmutable $startedAt = null;
@@ -68,10 +67,6 @@ abstract class Task {
 
     public function getStatus(): ?TaskStatus {
         return $this->status;
-    }
-
-    public function getTaskAttempt(): int {
-        return $this->taskAttempt;
     }
 
     public function getPriority(): int {
@@ -251,7 +246,6 @@ abstract class Task {
             'taskClass' => static::class,
             'stepClass' => $step::class,
             'stepStatus' => $result->getStatus()->value,
-            'taskAttempt' => $this->taskAttempt,
             'stepAttempt' => $step->getStepAttempt(),
         ]);
     }
@@ -285,7 +279,6 @@ abstract class Task {
     ): void {
         $this->id = $record->taskId;
         $this->status = TaskStatus::from($record->taskStatus);
-        $this->taskAttempt = $record->taskAttempt;
         $this->priority = $record->priority;
         $this->createdAt = $record->taskCreatedAt;
         $this->startedAt = $record->taskStartedAt;
@@ -305,7 +298,6 @@ abstract class Task {
             'taskId' => $record->taskId,
             'taskClass' => $record->taskClass,
             'taskStatus' => $record->taskStatus,
-            'taskAttempt' => $record->taskAttempt,
             'stepClass' => $record->stepClass,
             'stepStatus' => $record->stepStatus,
         ]);
@@ -403,7 +395,6 @@ abstract class Task {
 
     private function applyCancelledRecord(QueueRecord $record): void {
         $this->status = TaskStatus::from($record->taskStatus);
-        $this->taskAttempt = $record->taskAttempt;
         $this->priority = $record->priority;
         $this->createdAt = $record->taskCreatedAt;
         $this->startedAt = $record->taskStartedAt;

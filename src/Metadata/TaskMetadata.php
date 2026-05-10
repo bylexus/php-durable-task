@@ -4,12 +4,10 @@ declare(strict_types=1);
 
 namespace ByLexus\TaskRunner\Metadata;
 
-use ByLexus\TaskRunner\Enum\RetryMode;
-
 /**
  * Stores task execution metadata.
  *
- * Represents resolved retry, runtime, and cleanup settings for a task class.
+ * Represents resolved runtime and cleanup settings for a task class.
  *
  * This file is part of bylexus/php-tr
  *
@@ -17,39 +15,18 @@ use ByLexus\TaskRunner\Enum\RetryMode;
  */
 final class TaskMetadata
 {
-    private RetryMode $retryMode;
-    private int $retries;
-    private \DateInterval $retryDelay;
     private \DateInterval $maxRuntime;
     private \DateInterval $successfulCleanupAfter;
     private \DateInterval $unsuccessfulCleanupAfter;
 
     public function __construct(
-        RetryMode $retryMode,
-        int $retries,
-        \DateInterval $retryDelay,
         \DateInterval $maxRuntime,
         \DateInterval $successfulCleanupAfter,
         \DateInterval $unsuccessfulCleanupAfter,
     ) {
-        $this->retryMode = $retryMode;
-        $this->retries = $retries;
-        $this->retryDelay = clone $retryDelay;
         $this->maxRuntime = clone $maxRuntime;
         $this->successfulCleanupAfter = clone $successfulCleanupAfter;
         $this->unsuccessfulCleanupAfter = clone $unsuccessfulCleanupAfter;
-    }
-
-    public function getRetryMode(): RetryMode {
-        return $this->retryMode;
-    }
-
-    public function getRetries(): int {
-        return $this->retries;
-    }
-
-    public function getRetryDelay(): \DateInterval {
-        return clone $this->retryDelay;
     }
 
     public function getMaxRuntime(): \DateInterval {

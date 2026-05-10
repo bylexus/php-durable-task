@@ -11,7 +11,8 @@ use ByLexus\TaskRunner\Tests\Fixture\ConfiguredTaskFixture;
 use ByLexus\TaskRunner\Tests\Fixture\DefaultStepFixture;
 use ByLexus\TaskRunner\Tests\Fixture\DefaultTaskFixture;
 use ByLexus\TaskRunner\Tests\Fixture\InvalidCleanupOnStepFixture;
-use ByLexus\TaskRunner\Tests\Fixture\NegativeRetriesTaskFixture;
+use ByLexus\TaskRunner\Tests\Fixture\InvalidTaskRetryFixture;
+use ByLexus\TaskRunner\Tests\Fixture\NegativeRetriesStepFixture;
 use ByLexus\TaskRunner\Tests\Fixture\OverrideStepFixture;
 use ByLexus\TaskRunner\Tests\Fixture\ZeroCleanupTaskFixture;
 use ByLexus\TaskRunner\Tests\Fixture\ZeroMaxRuntimeTaskFixture;
@@ -23,9 +24,6 @@ final class MetadataResolverTest extends TestCase
         $resolver = new MetadataResolver();
         $metadata = $resolver->resolveTaskMetadata(DefaultTaskFixture::class);
 
-        self::assertSame(RetryMode::FAIL, $metadata->getRetryMode());
-        self::assertSame(3, $metadata->getRetries());
-        self::assertSame(60, $this->toSeconds($metadata->getRetryDelay()));
         self::assertSame(3600, $this->toSeconds($metadata->getMaxRuntime()));
         self::assertSame(0, $this->toSeconds($metadata->getSuccessfulCleanupAfter()));
         self::assertSame(604800, $this->toSeconds($metadata->getUnsuccessfulCleanupAfter()));
@@ -35,26 +33,23 @@ final class MetadataResolverTest extends TestCase
         $resolver = new MetadataResolver();
         $metadata = $resolver->resolveTaskMetadata(ConfiguredTaskFixture::class);
 
-        self::assertSame(RetryMode::RESTART, $metadata->getRetryMode());
-        self::assertSame(5, $metadata->getRetries());
-        self::assertSame(120, $this->toSeconds($metadata->getRetryDelay()));
         self::assertSame(7200, $this->toSeconds($metadata->getMaxRuntime()));
         self::assertSame(1800, $this->toSeconds($metadata->getSuccessfulCleanupAfter()));
         self::assertSame(172800, $this->toSeconds($metadata->getUnsuccessfulCleanupAfter()));
     }
 
-    public function testStepMetadataUsesTaskDefaultsWhenStepAttributesAreMissing(): void {
+    public function testStepMetadataUsesStepDefaultsWhenRetryAttributesAreMissing(): void {
         $resolver = new MetadataResolver();
         $taskMetadata = $resolver->resolveTaskMetadata(ConfiguredTaskFixture::class);
         $stepMetadata = $resolver->resolveStepMetadata(DefaultStepFixture::class, $taskMetadata);
 
-        self::assertSame(RetryMode::RESTART, $stepMetadata->getRetryMode());
-        self::assertSame(5, $stepMetadata->getRetries());
-        self::assertSame(120, $this->toSeconds($stepMetadata->getRetryDelay()));
+        self::assertSame(RetryMode::FAIL, $stepMetadata->getRetryMode());
+        self::assertSame(3, $stepMetadata->getRetries());
+        self::assertSame(60, $this->toSeconds($stepMetadata->getRetryDelay()));
         self::assertSame(7200, $this->toSeconds($stepMetadata->getMaxRuntime()));
     }
 
-    public function testStepMetadataOverridesTaskDefaultsWhereSpecified(): void {
+    public function testStepMetadataOverridesStepRetryDefaultsWhereSpecified(): void {
         $resolver = new MetadataResolver();
         $taskMetadata = $resolver->resolveTaskMetadata(ConfiguredTaskFixture::class);
         $stepMetadata = $resolver->resolveStepMetadata(OverrideStepFixture::class, $taskMetadata);
@@ -70,7 +65,16 @@ final class MetadataResolverTest extends TestCase
 
         $this->expectException(ConfigurationException::class);
 
-        $resolver->resolveTaskMetadata(NegativeRetriesTaskFixture::class);
+        $resolver->resolveStepMetadata(NegativeRetriesStepFixture::class);
+    }
+
+    public function testTaskRetryAttributesAreRejected(): void {
+        $resolver = new MetadataResolver();
+
+        $this->expectException(ConfigurationException::class);
+        $this->expectExceptionMessage('RetryMode is only allowed on step classes');
+
+        $resolver->resolveTaskMetadata(InvalidTaskRetryFixture::class);
     }
 
     public function testZeroCleanupIntervalIsAllowed(): void {

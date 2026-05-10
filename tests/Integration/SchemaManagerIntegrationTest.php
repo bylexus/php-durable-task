@@ -93,7 +93,6 @@ CREATE TABLE "%s" (
     task_class TEXT NOT NULL,
     step_class TEXT NULL,
     task_status TEXT NOT NULL,
-    task_attempt INTEGER NOT NULL DEFAULT 0,
     task_created_at TIMESTAMPTZ NOT NULL,
     task_started_at TIMESTAMPTZ NULL,
     task_finished_at TIMESTAMPTZ NULL,

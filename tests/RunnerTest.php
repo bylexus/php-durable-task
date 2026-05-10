@@ -7,8 +7,8 @@ namespace ByLexus\TaskRunner\Tests;
 use ByLexus\TaskRunner\Enum\RetryMode;
 use ByLexus\TaskRunner\Enum\StepStatus;
 use ByLexus\TaskRunner\Metadata\TaskMetadata;
-use ByLexus\TaskRunner\Queue\QueueRecord;
 use ByLexus\TaskRunner\Queue\PostgresQueue;
+use ByLexus\TaskRunner\Queue\QueueRecord;
 use ByLexus\TaskRunner\Result\ErrorInfo;
 use ByLexus\TaskRunner\Result\StepResult;
 use ByLexus\TaskRunner\Runner;
@@ -61,9 +61,6 @@ final class RunnerTest extends TestCase
             new RunnerConfiguration('runner-test'),
         );
         $metadata = new TaskMetadata(
-            RetryMode::FAIL,
-            3,
-            new \DateInterval('PT1M'),
             new \DateInterval('PT1H'),
             new \DateInterval('PT0S'),
             new \DateInterval('P7D'),
@@ -116,9 +113,6 @@ final class RunnerTest extends TestCase
             }
         };
         $metadata = new TaskMetadata(
-            RetryMode::RESTART,
-            3,
-            new \DateInterval('PT2M'),
             new \DateInterval('PT1H'),
             new \DateInterval('PT0S'),
             new \DateInterval('P7D'),
@@ -129,7 +123,6 @@ final class RunnerTest extends TestCase
             $task::class,
             null,
             'queued',
-            0,
             $recordedAt,
             null,
             null,

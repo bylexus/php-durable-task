@@ -35,7 +35,6 @@ final class QueueContextTest extends TestCase
             'task-class',
             'step-class',
             'queued',
-            0,
             new \DateTimeImmutable('2026-01-01T00:00:00+00:00'),
             null,
             null,
@@ -57,7 +56,7 @@ final class QueueContextTest extends TestCase
             new \DateTimeImmutable('2026-01-01T00:00:00+00:00'),
             Task::PRIO_HIGH,
         );
-        $task = new class($expectedRecord) extends Task {
+        $task = new class ($expectedRecord) extends Task {
             public ?\PDO $receivedConnection = null;
             public ?QueueConfiguration $receivedConfiguration = null;
             public ?MetadataResolver $receivedMetadataResolver = null;

@@ -7,6 +7,6 @@ namespace ByLexus\TaskRunner\Tests\Fixture;
 use ByLexus\TaskRunner\Attribute\Retries;
 
 #[Retries(-1)]
-final class NegativeRetriesTaskFixture
+final class NegativeRetriesStepFixture
 {
 }

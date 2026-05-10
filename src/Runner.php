@@ -356,7 +356,6 @@ class Runner {
                 'taskId' => $task->getId(),
                 'taskClass' => $task::class,
                 'stepClass' => $step::class,
-                'taskAttempt' => $task->getTaskAttempt(),
                 'stepAttempt' => $step->getStepAttempt(),
             ]);
 

@@ -24,6 +24,11 @@ final class MetadataResolver {
     /** @var array<class-string, TaskMetadata> */
     private array $taskCache = [];
 
+    private RetryModeAttribute $defaultRetryMode;
+    private Retries $defaultRetries;
+    private MaxRuntime $defaultMaxRuntime;
+    private CleanupAfter $defaultCleanupAfter;
+
     /**
      * @var array<class-string, array{
      *     retryMode: ?RetryMode,
@@ -34,28 +39,24 @@ final class MetadataResolver {
      */
     private array $stepAttributeCache = [];
 
+    public function __construct() {
+        $this->defaultRetryMode = new RetryModeAttribute(RetryModeAttribute::DEFAULT_MODE);
+        $this->defaultRetries = Retries::createDefault();
+        $this->defaultMaxRuntime = new MaxRuntime(new \DateInterval(MaxRuntime::DEFAULT_SPEC));
+        $this->defaultCleanupAfter = CleanupAfter::createDefault();
+    }
+
     public function resolveTaskMetadata(string $taskClass): TaskMetadata {
         if (isset($this->taskCache[$taskClass])) {
             return $this->taskCache[$taskClass];
         }
 
         $reflection = $this->reflectClass($taskClass);
-        $defaultRetryMode = new RetryModeAttribute(RetryModeAttribute::DEFAULT_MODE);
-        $defaultRetries = Retries::createDefault();
-        $defaultMaxRuntime = new MaxRuntime(new \DateInterval(MaxRuntime::DEFAULT_SPEC));
-        $defaultCleanupAfter = CleanupAfter::createDefault();
-        $retrySettings = $this->readRetries($reflection) ?? $defaultRetries;
-
-        $retryMode = $this->readRetryMode($reflection) ?? $defaultRetryMode->mode;
-        $retries = $retrySettings->count;
-        $retryDelay = clone $retrySettings->delay;
-        $maxRuntime = $this->readMaxRuntime($reflection) ?? clone $defaultMaxRuntime->interval;
-        $cleanupAfter = $this->readCleanupAfter($reflection) ?? $defaultCleanupAfter;
+        $this->assertNoTaskRetryAttributes($reflection);
+        $maxRuntime = $this->readMaxRuntime($reflection) ?? clone $this->defaultMaxRuntime->interval;
+        $cleanupAfter = $this->readCleanupAfter($reflection) ?? $this->defaultCleanupAfter;
 
         $metadata = new TaskMetadata(
-            $retryMode,
-            $retries,
-            $retryDelay,
             $maxRuntime,
             $cleanupAfter->successful,
             $cleanupAfter->unsuccessful,
@@ -71,9 +72,9 @@ final class MetadataResolver {
         $attributeValues = $this->resolveStepAttributeValues($stepClass);
 
         return new StepMetadata(
-            $attributeValues['retryMode'] ?? $taskMetadata->getRetryMode(),
-            $attributeValues['retries'] ?? $taskMetadata->getRetries(),
-            $attributeValues['retryDelay'] ?? $taskMetadata->getRetryDelay(),
+            $attributeValues['retryMode'] ?? $this->defaultRetryMode->mode,
+            $attributeValues['retries'] ?? $this->defaultRetries->count,
+            $attributeValues['retryDelay'] ?? $this->defaultRetries->delay,
             $attributeValues['maxRuntime'] ?? $taskMetadata->getMaxRuntime(),
         );
     }
@@ -197,19 +198,27 @@ final class MetadataResolver {
         return new CleanupAfter(clone $attribute->successful, clone $attribute->unsuccessful);
     }
 
-    private function createDefaultTaskMetadata(): TaskMetadata {
-        $defaultRetryMode = new RetryModeAttribute(RetryModeAttribute::DEFAULT_MODE);
-        $defaultRetries = Retries::createDefault();
-        $defaultMaxRuntime = new MaxRuntime(new \DateInterval(MaxRuntime::DEFAULT_SPEC));
-        $defaultCleanupAfter = CleanupAfter::createDefault();
+    private function assertNoTaskRetryAttributes(\ReflectionClass $reflection): void {
+        if ($reflection->getAttributes(RetryModeAttribute::class) !== []) {
+            throw new ConfigurationException(sprintf(
+                'RetryMode is only allowed on step classes: %s',
+                $reflection->getName(),
+            ));
+        }
 
+        if ($reflection->getAttributes(Retries::class) !== []) {
+            throw new ConfigurationException(sprintf(
+                'Retries is only allowed on step classes: %s',
+                $reflection->getName(),
+            ));
+        }
+    }
+
+    private function createDefaultTaskMetadata(): TaskMetadata {
         return new TaskMetadata(
-            $defaultRetryMode->mode,
-            $defaultRetries->count,
-            $defaultRetries->delay,
-            $defaultMaxRuntime->interval,
-            $defaultCleanupAfter->successful,
-            $defaultCleanupAfter->unsuccessful,
+            $this->defaultMaxRuntime->interval,
+            $this->defaultCleanupAfter->successful,
+            $this->defaultCleanupAfter->unsuccessful,
         );
     }
 

@@ -7,7 +7,7 @@ namespace ByLexus\TaskRunner\Attribute;
 /**
  * Declares automatic retry count.
  *
- * Defines how many retry attempts a task or step may perform and how long to wait before retrying.
+ * Defines how many retry attempts a step may perform and how long to wait before retrying.
  *
  * This file is part of bylexus/php-tr
  *
