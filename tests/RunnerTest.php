@@ -167,10 +167,36 @@ final class RunnerTest extends TestCase
         self::assertLessThanOrEqual($before->getTimestamp() + 121, $changes['available_at']->getTimestamp());
     }
 
+    public function testRunnerThrottlesExpiredQueueCleanupToEveryTenSeconds(): void {
+        $runner = new Runner(
+            $this->createStub(\PDO::class),
+            null,
+            new RunnerConfiguration('runner-test'),
+        );
+
+        self::assertTrue(
+            $this->invokePrivateMethod($runner, 'shouldCleanupExpiredQueueRecords', 1_000),
+        );
+
+        $this->writePrivateProperty($runner, 'lastExpiredQueueCleanupTimestamp', 1_000);
+
+        self::assertFalse(
+            $this->invokePrivateMethod($runner, 'shouldCleanupExpiredQueueRecords', 1_009),
+        );
+        self::assertTrue(
+            $this->invokePrivateMethod($runner, 'shouldCleanupExpiredQueueRecords', 1_010),
+        );
+    }
+
     private function readPrivateProperty(object $object, string $propertyName): mixed {
         $reflection = new \ReflectionProperty($object, $propertyName);
 
         return $reflection->getValue($object);
+    }
+
+    private function writePrivateProperty(object $object, string $propertyName, mixed $value): void {
+        $reflection = new \ReflectionProperty($object, $propertyName);
+        $reflection->setValue($object, $value);
     }
 
     private function invokePrivateMethod(object $object, string $methodName, mixed ...$arguments): mixed {

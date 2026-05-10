@@ -30,6 +30,7 @@ use Psr\Log\NullLogger;
  * (c) Alexander Schenkel <info@alexi.ch>
  */
 class Runner {
+    private const EXPIRED_QUEUE_CLEANUP_INTERVAL_SECONDS = 10;
     private const MAX_RUNTIME_EXCEEDED_MESSAGE = 'Step exceeded its configured maximum runtime.';
 
     private \PDO $connection;
@@ -40,6 +41,7 @@ class Runner {
     private SignalHandler $signalHandler;
     private LoggerInterface $logger;
     private bool $notificationListenerRegistered = false;
+    private ?int $lastExpiredQueueCleanupTimestamp = null;
 
     public function __construct(
         \PDO $connection,
@@ -105,7 +107,7 @@ class Runner {
         $this->ensureNotificationListener();
 
         while (true) {
-            $this->cleanupExpiredQueueRecords();
+            $this->cleanupExpiredQueueRecordsIfDue();
 
             $record = $this->queue->claim($this->runnerConfiguration->getRunnerId());
 
@@ -391,6 +393,27 @@ class Runner {
     private function cleanupExpiredQueueRecords(): void {
         $this->failExpiredRunningTasks();
         $this->queue->deleteExpired();
+    }
+
+    private function cleanupExpiredQueueRecordsIfDue(?int $currentTimestamp = null): void {
+        $timestamp = $currentTimestamp ?? time();
+
+        if (!$this->shouldCleanupExpiredQueueRecords($timestamp)) {
+            return;
+        }
+
+        $this->cleanupExpiredQueueRecords();
+        $this->lastExpiredQueueCleanupTimestamp = $timestamp;
+    }
+
+    private function shouldCleanupExpiredQueueRecords(int $currentTimestamp): bool {
+        if ($this->lastExpiredQueueCleanupTimestamp === null) {
+            return true;
+        }
+
+        $elapsedSeconds = $currentTimestamp - $this->lastExpiredQueueCleanupTimestamp;
+
+        return $elapsedSeconds >= self::EXPIRED_QUEUE_CLEANUP_INTERVAL_SECONDS;
     }
 
     private function failExpiredRunningTasks(): int {
