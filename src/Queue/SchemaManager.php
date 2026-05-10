@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask\Queue;
+namespace ByLexus\TaskRunner\Queue;
 
-use ByLexus\DurableTask\Exception\ConfigurationException;
+use ByLexus\TaskRunner\Exception\ConfigurationException;
 
 /**
  * Manages the queue schema.
  *
- * Creates and validates the PostgreSQL schema required by the durable task queue.
+ * Creates and validates the PostgreSQL schema required by the task queue.
  *
- * This file is part of bylexus/durable-task
+ * This file is part of bylexus/php-tr
  *
  * (c) Alexander Schenkel <info@alexi.ch>
  */
@@ -56,21 +56,21 @@ final class SchemaManager {
     ];
 
     private \PDO $connection;
-    private \ByLexus\DurableTask\Queue\QueueConfiguration $configuration;
+    private \ByLexus\TaskRunner\Queue\QueueConfiguration $configuration;
 
     public function __construct(
         \PDO $connection,
-        ?\ByLexus\DurableTask\Queue\QueueConfiguration $configuration = null,
+        ?\ByLexus\TaskRunner\Queue\QueueConfiguration $configuration = null,
     ) {
         $this->connection = $connection;
-        $this->configuration = $configuration ?? new \ByLexus\DurableTask\Queue\QueueConfiguration();
+        $this->configuration = $configuration ?? new \ByLexus\TaskRunner\Queue\QueueConfiguration();
     }
 
     /** @return list<string> */
     private static function bootstrapStatements(
-        ?\ByLexus\DurableTask\Queue\QueueConfiguration $configuration = null,
+        ?\ByLexus\TaskRunner\Queue\QueueConfiguration $configuration = null,
     ): array {
-        $configuration ??= new \ByLexus\DurableTask\Queue\QueueConfiguration();
+        $configuration ??= new \ByLexus\TaskRunner\Queue\QueueConfiguration();
 
         return array_merge(
             self::schemaStatementsFor($configuration),
@@ -83,7 +83,7 @@ final class SchemaManager {
         );
     }
 
-    public static function exportDdl(?\ByLexus\DurableTask\Queue\QueueConfiguration $configuration = null): string {
+    public static function exportDdl(?\ByLexus\TaskRunner\Queue\QueueConfiguration $configuration = null): string {
         return implode(";\n\n", self::bootstrapStatements($configuration)) . ";\n";
     }
 
@@ -163,7 +163,7 @@ final class SchemaManager {
         return $columnNames;
     }
 
-    private static function tableStatement(\ByLexus\DurableTask\Queue\QueueConfiguration $configuration): string {
+    private static function tableStatement(\ByLexus\TaskRunner\Queue\QueueConfiguration $configuration): string {
         return sprintf(
             <<<'SQL'
 CREATE TABLE IF NOT EXISTS %s (
@@ -199,7 +199,7 @@ SQL,
     }
 
     private static function priorityMigrationStatement(
-        \ByLexus\DurableTask\Queue\QueueConfiguration $configuration,
+        \ByLexus\TaskRunner\Queue\QueueConfiguration $configuration,
     ): string {
         return sprintf(
             'ALTER TABLE %s ADD COLUMN IF NOT EXISTS priority INTEGER NOT NULL DEFAULT 3',
@@ -207,7 +207,7 @@ SQL,
         );
     }
 
-    private static function blobTableStatement(\ByLexus\DurableTask\Queue\QueueConfiguration $configuration): string {
+    private static function blobTableStatement(\ByLexus\TaskRunner\Queue\QueueConfiguration $configuration): string {
         return sprintf(
             <<<'SQL'
 CREATE TABLE IF NOT EXISTS %s (
@@ -227,7 +227,7 @@ SQL,
     }
 
     /** @return list<string> */
-    private static function schemaStatementsFor(\ByLexus\DurableTask\Queue\QueueConfiguration $configuration): array {
+    private static function schemaStatementsFor(\ByLexus\TaskRunner\Queue\QueueConfiguration $configuration): array {
         $schemaName = $configuration->getSchemaName();
 
         if ($schemaName === null) {
@@ -238,7 +238,7 @@ SQL,
     }
 
     /** @return list<string> */
-    private static function indexStatementsFor(\ByLexus\DurableTask\Queue\QueueConfiguration $configuration): array {
+    private static function indexStatementsFor(\ByLexus\TaskRunner\Queue\QueueConfiguration $configuration): array {
         $tableName = self::quotedTableName($configuration);
 
         return [
@@ -270,16 +270,16 @@ SQL,
         ];
     }
 
-    private static function quotedTableName(\ByLexus\DurableTask\Queue\QueueConfiguration $configuration): string {
+    private static function quotedTableName(\ByLexus\TaskRunner\Queue\QueueConfiguration $configuration): string {
         return self::qualifiedIdentifier($configuration->getSchemaName(), $configuration->getTableName());
     }
 
-    private static function quotedBlobTableName(\ByLexus\DurableTask\Queue\QueueConfiguration $configuration): string {
+    private static function quotedBlobTableName(\ByLexus\TaskRunner\Queue\QueueConfiguration $configuration): string {
         return self::qualifiedIdentifier($configuration->getSchemaName(), $configuration->getBlobTableName());
     }
 
     private static function derivedName(
-        \ByLexus\DurableTask\Queue\QueueConfiguration $configuration,
+        \ByLexus\TaskRunner\Queue\QueueConfiguration $configuration,
         string $suffix,
     ): string {
         $sanitizedTableName = preg_replace('/[^a-zA-Z0-9_]+/', '_', $configuration->getTableName()) ?? 'queue';

@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask\Attribute;
+namespace ByLexus\TaskRunner\Attribute;
 
 /**
  * Declares task cleanup intervals.
  *
  * Defines successful and unsuccessful cleanup delays through a PHP attribute on task classes.
  *
- * This file is part of bylexus/durable-task
+ * This file is part of bylexus/php-tr
  *
  * (c) Alexander Schenkel <info@alexi.ch>
  */

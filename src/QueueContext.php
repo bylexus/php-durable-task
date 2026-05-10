@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask;
+namespace ByLexus\TaskRunner;
 
-use ByLexus\DurableTask\Metadata\MetadataResolver;
-use ByLexus\DurableTask\Queue\QueueConfiguration;
-use ByLexus\DurableTask\Queue\QueueRecord;
-use ByLexus\DurableTask\Queue\SchemaManager;
+use ByLexus\TaskRunner\Metadata\MetadataResolver;
+use ByLexus\TaskRunner\Queue\QueueConfiguration;
+use ByLexus\TaskRunner\Queue\QueueRecord;
+use ByLexus\TaskRunner\Queue\SchemaManager;
 
 /**
  * Wraps a queue connection context.
@@ -15,7 +15,7 @@ use ByLexus\DurableTask\Queue\SchemaManager;
  * Stores the shared PDO connection and queue configuration so application code can reuse them across
  * enqueueing, runner creation, and schema management.
  *
- * This file is part of bylexus/durable-task
+ * This file is part of bylexus/php-tr
  *
  * (c) Alexander Schenkel <info@alexi.ch>
  */

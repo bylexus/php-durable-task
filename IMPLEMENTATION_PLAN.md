@@ -1,4 +1,4 @@
-# Durable Tasks Implementation Plan
+# PHP Task Runner Implementation Plan
 
 ## Purpose
 
@@ -6,12 +6,12 @@ This document translates the concept in `PLAN.md` into an implementation-ready d
 
 ## Scope For V1
 
-V1 will implement a PostgreSQL-backed durable task library for PHP with these characteristics:
+V1 will implement a PostgreSQL-backed task queue / runner library for PHP with these characteristics:
 
 - Framework agnostic.
 - Depends on `PDO` for database access.
 - Uses PHP 8 attributes for task and step metadata.
-- Persists durable workflow state only in the task payload.
+- Persists workflow state only in the task payload.
 - Executes at most one step at a time per task.
 - Supports multiple runner processes through PostgreSQL row locking.
 - Auto-creates the queue table at runtime.
@@ -38,7 +38,7 @@ The first version should not attempt to solve these concerns:
 
 - Metadata uses PHP 8 attributes, not docblock annotations.
 - Retry mode defaults to rerunning the same failed step.
-- Durable workflow state lives only in the task payload JSON.
+- Workflow state lives only in the task payload JSON.
 - Queue claiming uses PostgreSQL row locking with `FOR UPDATE SKIP LOCKED`.
 - The library bootstraps the queue table automatically if it does not exist.
 - Baseline statuses are `queued`, `running`, `succeeded`, `failed`, and `cancelled`.
@@ -54,7 +54,7 @@ The first version should not attempt to solve these concerns:
 
 The first implementation should use a small, explicit package structure.
 
-PHP Main Namespace: `ByLexus\DurableTask`
+PHP Main Namespace: `ByLexus\TaskRunner`
 This should be implemented as a PHP Composer project (as library installable by composer).
 
 ```text
@@ -73,7 +73,7 @@ src/           <--- Namespace root
     StepStatus.php
     RunnerMode.php
   Exception/
-    DurableTaskException.php
+    TaskException.php
     ConfigurationException.php
     QueueException.php
     SerializationException.php
@@ -123,7 +123,7 @@ Responsibilities:
 Proposed responsibilities for the base API:
 
 - Expose read-only queue-derived properties such as id, status, timestamps, and retry counters.
-- Expose root and top-level payload accessors for durable workflow state.
+- Expose root and top-level payload accessors for workflow state.
 - Expose `cancel()` to request cancellation.
 - Expose `actualStep()` or equivalent to inspect the currently persisted step.
 - Expose `enqueue(PDO $connection)` as the entry point for new task instances.
@@ -145,7 +145,7 @@ Additional logging contract:
 
 Responsibilities:
 
-- Represent one durable unit of work.
+- Represent one unit of work.
 - Execute business logic.
 - Return a `StepResult`.
 
@@ -257,7 +257,7 @@ Concrete code areas that must change:
 - `src/PayloadNormalizer.php`
   Keep normalization separate, but scope it to the task-owned payload path only. After the refactor, no step code should depend on payload helpers directly.
 - `src/Runner.php`
-  Change the execution call from `$step->execute()` to `$step->execute($task)`. Remove timeout/cancellation/failure branches that read payload from the step object. All persistence branches should use the task payload as the authoritative durable state after execution.
+  Change the execution call from `$step->execute()` to `$step->execute($task)`. Remove timeout/cancellation/failure branches that read payload from the step object. All persistence branches should use the task payload as the authoritative state after execution.
 - `src/Result/StepResult.php`
   Remove payload state from `StepResult` entirely so it carries only outcome and diagnostics.
 - `src/Queue/PostgresQueue.php` and `src/Queue/QueueRecord.php`
@@ -279,7 +279,7 @@ Proposed implementation sequence:
 
 Expected behavioral result:
 
-- There is only one in-memory durable payload object per claimed task.
+- There is only one in-memory payload object per claimed task.
 - Steps mutate that object through the task reference they receive.
 - Queue persistence always writes the task's current payload object back after step execution.
 
@@ -382,7 +382,7 @@ V1 should use one primary queue table representing the current execution state o
 
 ### Proposed Table Name
 
-- Default: `durable_task_queue`
+- Default: `phptr_task_queue`
 - Configurable through queue configuration.
 
 ### Proposed Columns
@@ -409,7 +409,7 @@ Step state:
 - `step_started_at` timestamptz nullable.
 - `step_finished_at` timestamptz nullable.
 
-Durable data:
+Workflow data:
 
 - `payload_json` jsonb nullable.
 - `result_json` jsonb nullable.

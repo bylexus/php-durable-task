@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask\Runtime;
+namespace ByLexus\TaskRunner\Runtime;
 
 use Psr\Log\AbstractLogger;
 use Psr\Log\LoggerInterface;
@@ -13,7 +13,7 @@ use Stringable;
  *
  * Decorates a PSR-3 logger and merges runtime context into each emitted log entry.
  *
- * This file is part of bylexus/durable-task
+ * This file is part of bylexus/php-tr
  *
  * (c) Alexander Schenkel <info@alexi.ch>
  */

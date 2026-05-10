@@ -2,27 +2,27 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask;
+namespace ByLexus\TaskRunner;
 
-use ByLexus\DurableTask\Enum\TaskStatus;
-use ByLexus\DurableTask\Exception\ConfigurationException;
-use ByLexus\DurableTask\Metadata\MetadataResolver;
-use ByLexus\DurableTask\Queue\AttachmentBlobStore;
-use ByLexus\DurableTask\Queue\PostgresQueue;
-use ByLexus\DurableTask\Queue\QueueConfiguration;
-use ByLexus\DurableTask\Queue\QueueRecord;
-use ByLexus\DurableTask\Result\StepResult;
-use ByLexus\DurableTask\Runtime\ClassInstantiator;
-use ByLexus\DurableTask\Runtime\ContextualLogger;
+use ByLexus\TaskRunner\Enum\TaskStatus;
+use ByLexus\TaskRunner\Exception\ConfigurationException;
+use ByLexus\TaskRunner\Metadata\MetadataResolver;
+use ByLexus\TaskRunner\Queue\AttachmentBlobStore;
+use ByLexus\TaskRunner\Queue\PostgresQueue;
+use ByLexus\TaskRunner\Queue\QueueConfiguration;
+use ByLexus\TaskRunner\Queue\QueueRecord;
+use ByLexus\TaskRunner\Result\StepResult;
+use ByLexus\TaskRunner\Runtime\ClassInstantiator;
+use ByLexus\TaskRunner\Runtime\ContextualLogger;
 use Psr\Container\ContainerInterface;
 use Psr\Log\LoggerInterface;
 
 /**
- * Base class for durable tasks.
+ * Base class for tasks.
  *
  * Provides the shared workflow state, payload handling, and enqueue or restore logic for user-defined tasks.
  *
- * This file is part of bylexus/durable-task
+ * This file is part of bylexus/php-tr
  *
  * (c) Alexander Schenkel <info@alexi.ch>
  */

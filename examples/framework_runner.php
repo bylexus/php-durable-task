@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-use ByLexus\DurableTask\Runner;
-use ByLexus\DurableTask\RunnerConfiguration;
+use ByLexus\TaskRunner\Runner;
+use ByLexus\TaskRunner\RunnerConfiguration;
 use Psr\Log\LoggerInterface;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
 require_once __DIR__ . '/ImportUserProfileTask.php';
 
 // Runner and producer must point at the same queue table and database.
-$dsn = getenv('DURABLE_TASK_DSN') ?: 'pgsql:host=127.0.0.1;port=5432;dbname=durable_task_test';
-$user = getenv('DURABLE_TASK_DB_USER') ?: 'postgres';
-$password = getenv('DURABLE_TASK_DB_PASS') ?: 'postgres';
+$dsn = getenv('PHP_TR_DSN') ?: 'pgsql:host=127.0.0.1;port=5432;dbname=php_tr_test';
+$user = getenv('PHP_TR_DB_USER') ?: 'postgres';
+$password = getenv('PHP_TR_DB_PASS') ?: 'postgres';
 
 $pdo = new PDO($dsn, $user, $password);
 // The worker container is what allows constructor injection during task and step hydration.

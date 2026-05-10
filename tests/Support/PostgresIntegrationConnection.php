@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask\Tests\Support;
+namespace ByLexus\TaskRunner\Tests\Support;
 
 use PHPUnit\Framework\TestCase;
 
@@ -44,11 +44,11 @@ final class PostgresIntegrationConnection
         return $pdo;
     }
 
-    public static function uniqueTableName(string $prefix = 'durable_task_queue_test'): string {
+    public static function uniqueTableName(string $prefix = 'phptr_task_queue_test'): string {
         return sprintf('%s_%s', $prefix, bin2hex(random_bytes(6)));
     }
 
-    public static function uniqueSchemaName(string $prefix = 'durable_task_queue_schema_test'): string {
+    public static function uniqueSchemaName(string $prefix = 'phptr_task_queue_schema_test'): string {
         return sprintf('%s_%s', $prefix, bin2hex(random_bytes(6)));
     }
 

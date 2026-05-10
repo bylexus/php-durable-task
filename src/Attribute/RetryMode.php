@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask\Attribute;
+namespace ByLexus\TaskRunner\Attribute;
 
-use ByLexus\DurableTask\Enum\RetryMode as RetryModeEnum;
+use ByLexus\TaskRunner\Enum\RetryMode as RetryModeEnum;
 
 /**
  * Declares retry behavior.
  *
  * Defines the retry strategy for a task or step through a PHP attribute.
  *
- * This file is part of bylexus/durable-task
+ * This file is part of bylexus/php-tr
  *
  * (c) Alexander Schenkel <info@alexi.ch>
  */

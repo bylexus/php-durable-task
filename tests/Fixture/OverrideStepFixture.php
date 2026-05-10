@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask\Tests\Fixture;
+namespace ByLexus\TaskRunner\Tests\Fixture;
 
-use ByLexus\DurableTask\Attribute\MaxRuntime;
-use ByLexus\DurableTask\Attribute\Retries;
-use ByLexus\DurableTask\Attribute\RetryMode as RetryModeAttribute;
-use ByLexus\DurableTask\Enum\RetryMode;
+use ByLexus\TaskRunner\Attribute\MaxRuntime;
+use ByLexus\TaskRunner\Attribute\Retries;
+use ByLexus\TaskRunner\Attribute\RetryMode as RetryModeAttribute;
+use ByLexus\TaskRunner\Enum\RetryMode;
 
 #[RetryModeAttribute(RetryMode::SKIP)]
 #[Retries(1, new \DateInterval('PT15M'))]

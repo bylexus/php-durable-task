@@ -1,4 +1,4 @@
-# Durable Tasks TODO
+# PHP TR TODO
 
 ## Examples And Documentation
 
@@ -9,7 +9,7 @@
 
 - [ ] Verify the queue schema can be created on an empty PostgreSQL database through explicit bootstrap.
 - [ ] Verify one or more runner processes can safely claim and execute tasks.
-- [ ] Verify task state remains durable across runner restarts.
+- [ ] Verify task state remains across runner restarts.
 - [ ] Verify end-to-end tests cover the main lifecycle paths.
 
 ## Arbitary notes
@@ -18,3 +18,4 @@
 - retry delay (time to retry)
 - fetch task, task list functions
 - re-queue task / step from within step
+- explore possibilities for mysql/sqlite

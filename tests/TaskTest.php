@@ -2,26 +2,26 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask\Tests;
+namespace ByLexus\TaskRunner\Tests;
 
-use ByLexus\DurableTask\Enum\StepStatus;
-use ByLexus\DurableTask\Enum\TaskStatus;
-use ByLexus\DurableTask\Exception\ConfigurationException;
-use ByLexus\DurableTask\FileAttachment;
-use ByLexus\DurableTask\Queue\QueueRecord;
-use ByLexus\DurableTask\Task;
-use ByLexus\DurableTask\Tests\Fixture\ConstructorInjectedServiceFixture;
-use ByLexus\DurableTask\Tests\Fixture\ConstructorInjectedTaskFixture;
-use ByLexus\DurableTask\Tests\Fixture\LoggerInjectedStepFixture;
-use ByLexus\DurableTask\Tests\Fixture\LoggerInjectedTaskFixture;
-use ByLexus\DurableTask\Tests\Fixture\EmptyWorkflowTaskFixture;
-use ByLexus\DurableTask\Tests\Fixture\QueueWorkflowStepFixture;
-use ByLexus\DurableTask\Tests\Fixture\QueueWorkflowTaskFixture;
-use ByLexus\DurableTask\Tests\Fixture\ScalarConstructorTaskFixture;
-use ByLexus\DurableTask\Tests\Fixture\ServiceAndLoggerInjectedTaskFixture;
-use ByLexus\DurableTask\Tests\Fixture\StepInjectedOnlyTaskFixture;
-use ByLexus\DurableTask\Tests\Support\InMemoryContainer;
-use ByLexus\DurableTask\Tests\Support\SpyLogger;
+use ByLexus\TaskRunner\Enum\StepStatus;
+use ByLexus\TaskRunner\Enum\TaskStatus;
+use ByLexus\TaskRunner\Exception\ConfigurationException;
+use ByLexus\TaskRunner\FileAttachment;
+use ByLexus\TaskRunner\Queue\QueueRecord;
+use ByLexus\TaskRunner\Task;
+use ByLexus\TaskRunner\Tests\Fixture\ConstructorInjectedServiceFixture;
+use ByLexus\TaskRunner\Tests\Fixture\ConstructorInjectedTaskFixture;
+use ByLexus\TaskRunner\Tests\Fixture\LoggerInjectedStepFixture;
+use ByLexus\TaskRunner\Tests\Fixture\LoggerInjectedTaskFixture;
+use ByLexus\TaskRunner\Tests\Fixture\EmptyWorkflowTaskFixture;
+use ByLexus\TaskRunner\Tests\Fixture\QueueWorkflowStepFixture;
+use ByLexus\TaskRunner\Tests\Fixture\QueueWorkflowTaskFixture;
+use ByLexus\TaskRunner\Tests\Fixture\ScalarConstructorTaskFixture;
+use ByLexus\TaskRunner\Tests\Fixture\ServiceAndLoggerInjectedTaskFixture;
+use ByLexus\TaskRunner\Tests\Fixture\StepInjectedOnlyTaskFixture;
+use ByLexus\TaskRunner\Tests\Support\InMemoryContainer;
+use ByLexus\TaskRunner\Tests\Support\SpyLogger;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 
@@ -366,7 +366,7 @@ final class TaskTest extends TestCase
         $record = new QueueRecord(
             42,
             ConstructorInjectedTaskFixture::class,
-            \ByLexus\DurableTask\Tests\Fixture\ConstructorInjectedStepFixture::class,
+            \ByLexus\TaskRunner\Tests\Fixture\ConstructorInjectedStepFixture::class,
             TaskStatus::QUEUED->value,
             1,
             new \DateTimeImmutable('2026-01-01T00:00:00+00:00'),
@@ -399,7 +399,7 @@ final class TaskTest extends TestCase
         self::assertInstanceOf(ConstructorInjectedTaskFixture::class, $task);
         self::assertSame('mailer', $task->getInjectedServiceName());
         self::assertInstanceOf(
-            \ByLexus\DurableTask\Tests\Fixture\ConstructorInjectedStepFixture::class,
+            \ByLexus\TaskRunner\Tests\Fixture\ConstructorInjectedStepFixture::class,
             $task->actualStep(),
         );
     }
@@ -408,7 +408,7 @@ final class TaskTest extends TestCase
         $record = new QueueRecord(
             42,
             ServiceAndLoggerInjectedTaskFixture::class,
-            \ByLexus\DurableTask\Tests\Fixture\ServiceAndLoggerInjectedStepFixture::class,
+            \ByLexus\TaskRunner\Tests\Fixture\ServiceAndLoggerInjectedStepFixture::class,
             TaskStatus::QUEUED->value,
             1,
             new \DateTimeImmutable('2026-01-01T00:00:00+00:00'),
@@ -445,13 +445,13 @@ final class TaskTest extends TestCase
         self::assertSame('mailer', $typedTask->getInjectedServiceName());
         self::assertSame($logger, $typedTask->getInjectedLogger());
         self::assertInstanceOf(
-            \ByLexus\DurableTask\Tests\Fixture\ServiceAndLoggerInjectedStepFixture::class,
+            \ByLexus\TaskRunner\Tests\Fixture\ServiceAndLoggerInjectedStepFixture::class,
             $typedTask->actualStep(),
         );
         $typedStep = $typedTask->actualStep();
 
         self::assertInstanceOf(
-            \ByLexus\DurableTask\Tests\Fixture\ServiceAndLoggerInjectedStepFixture::class,
+            \ByLexus\TaskRunner\Tests\Fixture\ServiceAndLoggerInjectedStepFixture::class,
             $typedStep,
         );
         self::assertSame($logger, $typedStep->getInjectedLogger());
@@ -495,7 +495,7 @@ final class TaskTest extends TestCase
         $record = new QueueRecord(
             42,
             StepInjectedOnlyTaskFixture::class,
-            \ByLexus\DurableTask\Tests\Fixture\ConstructorInjectedStepFixture::class,
+            \ByLexus\TaskRunner\Tests\Fixture\ConstructorInjectedStepFixture::class,
             TaskStatus::QUEUED->value,
             1,
             new \DateTimeImmutable('2026-01-01T00:00:00+00:00'),

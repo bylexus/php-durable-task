@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask\Tests\Fixture;
+namespace ByLexus\TaskRunner\Tests\Fixture;
 
-use ByLexus\DurableTask\Attribute\Retries;
+use ByLexus\TaskRunner\Attribute\Retries;
 
 #[Retries(-1)]
 final class NegativeRetriesTaskFixture

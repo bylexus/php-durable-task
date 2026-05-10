@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask\Tests\Fixture;
+namespace ByLexus\TaskRunner\Tests\Fixture;
 
 final class DefaultStepFixture
 {

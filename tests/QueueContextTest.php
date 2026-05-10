@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask\Tests;
+namespace ByLexus\TaskRunner\Tests;
 
-use ByLexus\DurableTask\Metadata\MetadataResolver;
-use ByLexus\DurableTask\Queue\QueueConfiguration;
-use ByLexus\DurableTask\Queue\QueueRecord;
-use ByLexus\DurableTask\Queue\SchemaManager;
-use ByLexus\DurableTask\QueueContext;
-use ByLexus\DurableTask\RunnerConfiguration;
-use ByLexus\DurableTask\Step;
-use ByLexus\DurableTask\Task;
+use ByLexus\TaskRunner\Metadata\MetadataResolver;
+use ByLexus\TaskRunner\Queue\QueueConfiguration;
+use ByLexus\TaskRunner\Queue\QueueRecord;
+use ByLexus\TaskRunner\Queue\SchemaManager;
+use ByLexus\TaskRunner\QueueContext;
+use ByLexus\TaskRunner\RunnerConfiguration;
+use ByLexus\TaskRunner\Step;
+use ByLexus\TaskRunner\Task;
 use PHPUnit\Framework\TestCase;
 
 final class QueueContextTest extends TestCase

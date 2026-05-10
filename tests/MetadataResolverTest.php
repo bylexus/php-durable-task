@@ -2,19 +2,19 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask\Tests;
+namespace ByLexus\TaskRunner\Tests;
 
-use ByLexus\DurableTask\Enum\RetryMode;
-use ByLexus\DurableTask\Exception\ConfigurationException;
-use ByLexus\DurableTask\Metadata\MetadataResolver;
-use ByLexus\DurableTask\Tests\Fixture\ConfiguredTaskFixture;
-use ByLexus\DurableTask\Tests\Fixture\DefaultStepFixture;
-use ByLexus\DurableTask\Tests\Fixture\DefaultTaskFixture;
-use ByLexus\DurableTask\Tests\Fixture\InvalidCleanupOnStepFixture;
-use ByLexus\DurableTask\Tests\Fixture\NegativeRetriesTaskFixture;
-use ByLexus\DurableTask\Tests\Fixture\OverrideStepFixture;
-use ByLexus\DurableTask\Tests\Fixture\ZeroCleanupTaskFixture;
-use ByLexus\DurableTask\Tests\Fixture\ZeroMaxRuntimeTaskFixture;
+use ByLexus\TaskRunner\Enum\RetryMode;
+use ByLexus\TaskRunner\Exception\ConfigurationException;
+use ByLexus\TaskRunner\Metadata\MetadataResolver;
+use ByLexus\TaskRunner\Tests\Fixture\ConfiguredTaskFixture;
+use ByLexus\TaskRunner\Tests\Fixture\DefaultStepFixture;
+use ByLexus\TaskRunner\Tests\Fixture\DefaultTaskFixture;
+use ByLexus\TaskRunner\Tests\Fixture\InvalidCleanupOnStepFixture;
+use ByLexus\TaskRunner\Tests\Fixture\NegativeRetriesTaskFixture;
+use ByLexus\TaskRunner\Tests\Fixture\OverrideStepFixture;
+use ByLexus\TaskRunner\Tests\Fixture\ZeroCleanupTaskFixture;
+use ByLexus\TaskRunner\Tests\Fixture\ZeroMaxRuntimeTaskFixture;
 use PHPUnit\Framework\TestCase;
 
 final class MetadataResolverTest extends TestCase

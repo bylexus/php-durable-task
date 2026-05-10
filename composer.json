@@ -1,6 +1,6 @@
 {
-    "name": "bylexus/durable-task",
-    "description": "Durable task library for PHP backed by PostgreSQL.",
+    "name": "bylexus/php-tr",
+    "description": "Queued Task worker library for PHP backed by PostgreSQL.",
     "version": "0.0.1",
     "type": "library",
     "require": {
@@ -16,12 +16,12 @@
     },
     "autoload": {
         "psr-4": {
-            "ByLexus\\DurableTask\\": "src/"
+            "ByLexus\\TaskRunner\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "ByLexus\\DurableTask\\Tests\\": "tests/",
+            "ByLexus\\TaskRunner\\Tests\\": "tests/",
             "": [
                 "examples/"
             ]

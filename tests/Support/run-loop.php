@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-use ByLexus\DurableTask\Queue\QueueConfiguration;
-use ByLexus\DurableTask\Runner;
-use ByLexus\DurableTask\RunnerConfiguration;
+use ByLexus\TaskRunner\Queue\QueueConfiguration;
+use ByLexus\TaskRunner\Runner;
+use ByLexus\TaskRunner\RunnerConfiguration;
 
 require dirname(__DIR__, 2) . '/vendor/autoload.php';
 

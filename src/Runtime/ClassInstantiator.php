@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask\Runtime;
+namespace ByLexus\TaskRunner\Runtime;
 
-use ByLexus\DurableTask\Exception\ConfigurationException;
+use ByLexus\TaskRunner\Exception\ConfigurationException;
 use Psr\Container\ContainerInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
@@ -14,7 +14,7 @@ use Psr\Log\NullLogger;
  *
  * Uses reflection and the service container to build workflow classes and resolve logger injection.
  *
- * This file is part of bylexus/durable-task
+ * This file is part of bylexus/php-tr
  *
  * (c) Alexander Schenkel <info@alexi.ch>
  */

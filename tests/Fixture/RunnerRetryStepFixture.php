@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask\Tests\Fixture;
+namespace ByLexus\TaskRunner\Tests\Fixture;
 
-use ByLexus\DurableTask\Attribute\Retries;
-use ByLexus\DurableTask\Attribute\RetryMode as RetryModeAttribute;
-use ByLexus\DurableTask\Enum\RetryMode;
-use ByLexus\DurableTask\Result\ErrorInfo;
-use ByLexus\DurableTask\Result\StepResult;
-use ByLexus\DurableTask\Step;
-use ByLexus\DurableTask\Task;
+use ByLexus\TaskRunner\Attribute\Retries;
+use ByLexus\TaskRunner\Attribute\RetryMode as RetryModeAttribute;
+use ByLexus\TaskRunner\Enum\RetryMode;
+use ByLexus\TaskRunner\Result\ErrorInfo;
+use ByLexus\TaskRunner\Result\StepResult;
+use ByLexus\TaskRunner\Step;
+use ByLexus\TaskRunner\Task;
 
 #[RetryModeAttribute(RetryMode::RESTART)]
 #[Retries(1, new \DateInterval('PT0S'))]

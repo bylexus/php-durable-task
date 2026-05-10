@@ -1,7 +1,7 @@
 <?php
 
-use ByLexus\DurableTask\Queue\QueueConfiguration;
-use ByLexus\DurableTask\Queue\SchemaManager;
+use ByLexus\TaskRunner\Queue\QueueConfiguration;
+use ByLexus\TaskRunner\Queue\SchemaManager;
 use PHPMailer\PHPMailer\PHPMailer;
 
 require_once(__DIR__ . '/../vendor/autoload.php');
@@ -10,8 +10,8 @@ require_once(__DIR__ . '/DailyCatTask.php');
 require_once(__DIR__ . '/ExampleServiceContainer.php');
 
 
-$conn = new PDO("pgsql:host=127.0.0.1;port=5432;dbname=durable_task_test", 'postgres', 'postgres');
-$qc = new QueueConfiguration(schemaName: 'durable');
+$conn = new PDO("pgsql:host=127.0.0.1;port=5432;dbname=php_tr_test", 'postgres', 'postgres');
+$qc = new QueueConfiguration(schemaName: 'phptr');
 $sm = new SchemaManager($conn, $qc);
 $sm->bootstrap();
 

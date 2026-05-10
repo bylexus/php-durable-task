@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask\Attribute;
+namespace ByLexus\TaskRunner\Attribute;
 
 /**
  * Declares maximum execution time.
  *
  * Defines the runtime limit for a task or step through a PHP attribute.
  *
- * This file is part of bylexus/durable-task
+ * This file is part of bylexus/php-tr
  *
  * (c) Alexander Schenkel <info@alexi.ch>
  */

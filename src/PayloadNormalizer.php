@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask;
+namespace ByLexus\TaskRunner;
 
-use ByLexus\DurableTask\Exception\ConfigurationException;
-use ByLexus\DurableTask\Queue\AttachmentBlobStore;
+use ByLexus\TaskRunner\Exception\ConfigurationException;
+use ByLexus\TaskRunner\Queue\AttachmentBlobStore;
 
 /**
  * Normalizes task payload values.
  *
  * Converts arrays and objects into consistent stdClass payload structures that can be serialized reliably.
  *
- * This file is part of bylexus/durable-task
+ * This file is part of bylexus/php-tr
  *
  * (c) Alexander Schenkel <info@alexi.ch>
  */

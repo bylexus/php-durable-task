@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask\Enum;
+namespace ByLexus\TaskRunner\Enum;
 
 enum StepStatus: string {
     case QUEUED = 'queued';

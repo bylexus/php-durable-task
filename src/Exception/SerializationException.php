@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask\Exception;
+namespace ByLexus\TaskRunner\Exception;
 
 /**
  * Signals serialization failures.
  *
  * Is thrown when workflow payloads or results cannot be serialized or restored.
  *
- * This file is part of bylexus/durable-task
+ * This file is part of bylexus/php-tr
  *
  * (c) Alexander Schenkel <info@alexi.ch>
  */
-class SerializationException extends DurableTaskException {
+class SerializationException extends TaskException {
 }

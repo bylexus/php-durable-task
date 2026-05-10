@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask\Runtime;
+namespace ByLexus\TaskRunner\Runtime;
 
 /**
  * Handles runner shutdown signals.
  *
  * Listens for process signals and exposes graceful shutdown state for the task runner.
  *
- * This file is part of bylexus/durable-task
+ * This file is part of bylexus/php-tr
  *
  * (c) Alexander Schenkel <info@alexi.ch>
  */

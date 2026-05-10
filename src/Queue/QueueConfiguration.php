@@ -2,20 +2,20 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask\Queue;
+namespace ByLexus\TaskRunner\Queue;
 
 /**
  * Configures the queue table.
  *
- * Defines the PostgreSQL table name and related settings used by the durable task queue.
+ * Defines the PostgreSQL table name and related settings used by the task queue.
  *
- * This file is part of bylexus/durable-task
+ * This file is part of bylexus/php-tr
  *
  * (c) Alexander Schenkel <info@alexi.ch>
  */
 final class QueueConfiguration
 {
-    public const DEFAULT_TABLE_NAME = 'durable_task_queue';
+    public const DEFAULT_TABLE_NAME = 'phptr_task_queue';
     public const BLOB_TABLE_SUFFIX = '_blob_data';
 
     private string $tableName;

@@ -2,21 +2,21 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask\Metadata;
+namespace ByLexus\TaskRunner\Metadata;
 
-use ByLexus\DurableTask\Attribute\CleanupAfter;
-use ByLexus\DurableTask\Attribute\MaxRuntime;
-use ByLexus\DurableTask\Attribute\Retries;
-use ByLexus\DurableTask\Attribute\RetryMode as RetryModeAttribute;
-use ByLexus\DurableTask\Enum\RetryMode;
-use ByLexus\DurableTask\Exception\ConfigurationException;
+use ByLexus\TaskRunner\Attribute\CleanupAfter;
+use ByLexus\TaskRunner\Attribute\MaxRuntime;
+use ByLexus\TaskRunner\Attribute\Retries;
+use ByLexus\TaskRunner\Attribute\RetryMode as RetryModeAttribute;
+use ByLexus\TaskRunner\Enum\RetryMode;
+use ByLexus\TaskRunner\Exception\ConfigurationException;
 
 /**
  * Resolves task and step metadata.
  *
  * Uses reflection to read attributes and cache retry, runtime, and cleanup metadata for workflow classes.
  *
- * This file is part of bylexus/durable-task
+ * This file is part of bylexus/php-tr
  *
  * (c) Alexander Schenkel <info@alexi.ch>
  */

@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask\Metadata;
+namespace ByLexus\TaskRunner\Metadata;
 
-use ByLexus\DurableTask\Enum\RetryMode;
+use ByLexus\TaskRunner\Enum\RetryMode;
 
 /**
  * Stores step execution metadata.
  *
  * Represents resolved retry mode, retry count, and maximum runtime settings for a step class.
  *
- * This file is part of bylexus/durable-task
+ * This file is part of bylexus/php-tr
  *
  * (c) Alexander Schenkel <info@alexi.ch>
  */

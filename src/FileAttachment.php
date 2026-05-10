@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask;
+namespace ByLexus\TaskRunner;
 
-use ByLexus\DurableTask\Exception\ConfigurationException;
-use ByLexus\DurableTask\Exception\SerializationException;
-use ByLexus\DurableTask\Queue\AttachmentBlobStore;
+use ByLexus\TaskRunner\Exception\ConfigurationException;
+use ByLexus\TaskRunner\Exception\SerializationException;
+use ByLexus\TaskRunner\Queue\AttachmentBlobStore;
 
 /**
  * Represents a file attachment stored in task payloads.
@@ -14,12 +14,12 @@ use ByLexus\DurableTask\Queue\AttachmentBlobStore;
  * Keeps attachment metadata in the payload while binary content is either held transiently in memory
  * before persistence or resolved through the attachment blob store after hydration.
  *
- * This file is part of bylexus/durable-task
+ * This file is part of bylexus/php-tr
  *
  * (c) Alexander Schenkel <info@alexi.ch>
  */
 final class FileAttachment {
-    public const TYPE_MARKER_FIELD = '__durable_type';
+    public const TYPE_MARKER_FIELD = '__php_tr_type';
     public const TYPE_MARKER_VALUE = 'file_attachment';
 
     private function __construct(

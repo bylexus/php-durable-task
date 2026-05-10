@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-use ByLexus\DurableTask\Attribute\CleanupAfter;
-use ByLexus\DurableTask\Step;
-use ByLexus\DurableTask\Task;
+use ByLexus\TaskRunner\Attribute\CleanupAfter;
+use ByLexus\TaskRunner\Step;
+use ByLexus\TaskRunner\Task;
 use Psr\Log\LoggerInterface;
 
 require_once __DIR__ . '/PersistUserProfileStep.php';
@@ -21,7 +21,7 @@ final class ImportUserProfileTask extends Task {
     }
 
     public function forUserId(int $userId): self {
-        // Producers prepare the durable payload before the task is inserted into the queue table.
+        // Producers prepare the payload before the task is inserted into the queue table.
         $this->getPayload()->userId = $userId;
 
         return $this;

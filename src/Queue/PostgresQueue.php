@@ -2,25 +2,25 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask\Queue;
+namespace ByLexus\TaskRunner\Queue;
 
-use ByLexus\DurableTask\Enum\StepStatus;
-use ByLexus\DurableTask\Enum\TaskStatus;
-use ByLexus\DurableTask\Exception\ConfigurationException;
-use ByLexus\DurableTask\PayloadNormalizer;
-use ByLexus\DurableTask\Exception\QueueException;
-use ByLexus\DurableTask\Exception\SerializationException;
-use ByLexus\DurableTask\Step;
-use ByLexus\DurableTask\Task;
+use ByLexus\TaskRunner\Enum\StepStatus;
+use ByLexus\TaskRunner\Enum\TaskStatus;
+use ByLexus\TaskRunner\Exception\ConfigurationException;
+use ByLexus\TaskRunner\PayloadNormalizer;
+use ByLexus\TaskRunner\Exception\QueueException;
+use ByLexus\TaskRunner\Exception\SerializationException;
+use ByLexus\TaskRunner\Step;
+use ByLexus\TaskRunner\Task;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
 /**
  * Persists workflow records in PostgreSQL.
  *
- * Implements queue storage operations for durable tasks, including inserts, updates, and record retrieval.
+ * Implements queue storage operations for tasks, including inserts, updates, and record retrieval.
  *
- * This file is part of bylexus/durable-task
+ * This file is part of bylexus/php-tr
  *
  * (c) Alexander Schenkel <info@alexi.ch>
  */
@@ -429,12 +429,12 @@ SQL,
             $nameParts[] = $this->sanitizeIdentifierPart($this->configuration->getSchemaName()) ?? 'queue';
         }
 
-        $nameParts[] = $this->sanitizeIdentifierPart($this->configuration->getTableName()) ?? 'durable_task_queue';
+        $nameParts[] = $this->sanitizeIdentifierPart($this->configuration->getTableName()) ?? 'phptr_task_queue';
 
         $channelBase = trim(implode('_', $nameParts), '_');
 
         if ($channelBase === '') {
-            $channelBase = 'durable_task_queue';
+            $channelBase = 'phptr_task_queue';
         }
 
         $channel = sprintf('%s_notify', $channelBase);

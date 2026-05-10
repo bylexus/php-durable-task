@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask\Tests;
+namespace ByLexus\TaskRunner\Tests;
 
-use ByLexus\DurableTask\Enum\StepStatus;
-use ByLexus\DurableTask\Exception\ConfigurationException;
-use ByLexus\DurableTask\Result\ErrorInfo;
-use ByLexus\DurableTask\Result\StepResult;
+use ByLexus\TaskRunner\Enum\StepStatus;
+use ByLexus\TaskRunner\Exception\ConfigurationException;
+use ByLexus\TaskRunner\Result\ErrorInfo;
+use ByLexus\TaskRunner\Result\StepResult;
 use PHPUnit\Framework\TestCase;
 
 final class ResultTest extends TestCase

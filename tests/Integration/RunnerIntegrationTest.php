@@ -2,35 +2,35 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask\Tests\Integration;
+namespace ByLexus\TaskRunner\Tests\Integration;
 
-use ByLexus\DurableTask\Enum\StepStatus;
-use ByLexus\DurableTask\Enum\TaskStatus;
-use ByLexus\DurableTask\FileAttachment;
-use ByLexus\DurableTask\Queue\PostgresQueue;
-use ByLexus\DurableTask\Queue\QueueConfiguration;
-use ByLexus\DurableTask\Queue\QueueRecord;
-use ByLexus\DurableTask\Queue\SchemaManager;
-use ByLexus\DurableTask\Runner;
-use ByLexus\DurableTask\RunnerConfiguration;
-use ByLexus\DurableTask\Task;
-use ByLexus\DurableTask\Tests\Fixture\GracefulShutdownTaskFixture;
-use ByLexus\DurableTask\Tests\Fixture\ConstructorInjectedServiceFixture;
-use ByLexus\DurableTask\Tests\Fixture\ConstructorInjectedTaskFixture;
-use ByLexus\DurableTask\Tests\Fixture\AttachmentRoundtripTaskFixture;
-use ByLexus\DurableTask\Tests\Fixture\PayloadHandoffTaskFixture;
-use ByLexus\DurableTask\Tests\Fixture\PayloadMutationTaskFixture;
-use ByLexus\DurableTask\Tests\Fixture\RetainedQueueWorkflowTaskFixture;
-use ByLexus\DurableTask\Tests\Fixture\RunnerExceptionTaskFixture;
-use ByLexus\DurableTask\Tests\Fixture\RunnerNextStepExceptionTaskFixture;
-use ByLexus\DurableTask\Tests\Fixture\RunnerRetryTaskFixture;
-use ByLexus\DurableTask\Tests\Fixture\RunnerTimeoutTaskFixture;
-use ByLexus\DurableTask\Tests\Fixture\QueueWorkflowTaskFixture;
-use ByLexus\DurableTask\Tests\Fixture\ServiceAndLoggerInjectedTaskFixture;
-use ByLexus\DurableTask\Tests\Fixture\StepInjectedOnlyTaskFixture;
-use ByLexus\DurableTask\Tests\Support\PostgresIntegrationConnection;
-use ByLexus\DurableTask\Tests\Support\InMemoryContainer;
-use ByLexus\DurableTask\Tests\Support\SpyLogger;
+use ByLexus\TaskRunner\Enum\StepStatus;
+use ByLexus\TaskRunner\Enum\TaskStatus;
+use ByLexus\TaskRunner\FileAttachment;
+use ByLexus\TaskRunner\Queue\PostgresQueue;
+use ByLexus\TaskRunner\Queue\QueueConfiguration;
+use ByLexus\TaskRunner\Queue\QueueRecord;
+use ByLexus\TaskRunner\Queue\SchemaManager;
+use ByLexus\TaskRunner\Runner;
+use ByLexus\TaskRunner\RunnerConfiguration;
+use ByLexus\TaskRunner\Task;
+use ByLexus\TaskRunner\Tests\Fixture\GracefulShutdownTaskFixture;
+use ByLexus\TaskRunner\Tests\Fixture\ConstructorInjectedServiceFixture;
+use ByLexus\TaskRunner\Tests\Fixture\ConstructorInjectedTaskFixture;
+use ByLexus\TaskRunner\Tests\Fixture\AttachmentRoundtripTaskFixture;
+use ByLexus\TaskRunner\Tests\Fixture\PayloadHandoffTaskFixture;
+use ByLexus\TaskRunner\Tests\Fixture\PayloadMutationTaskFixture;
+use ByLexus\TaskRunner\Tests\Fixture\RetainedQueueWorkflowTaskFixture;
+use ByLexus\TaskRunner\Tests\Fixture\RunnerExceptionTaskFixture;
+use ByLexus\TaskRunner\Tests\Fixture\RunnerNextStepExceptionTaskFixture;
+use ByLexus\TaskRunner\Tests\Fixture\RunnerRetryTaskFixture;
+use ByLexus\TaskRunner\Tests\Fixture\RunnerTimeoutTaskFixture;
+use ByLexus\TaskRunner\Tests\Fixture\QueueWorkflowTaskFixture;
+use ByLexus\TaskRunner\Tests\Fixture\ServiceAndLoggerInjectedTaskFixture;
+use ByLexus\TaskRunner\Tests\Fixture\StepInjectedOnlyTaskFixture;
+use ByLexus\TaskRunner\Tests\Support\PostgresIntegrationConnection;
+use ByLexus\TaskRunner\Tests\Support\InMemoryContainer;
+use ByLexus\TaskRunner\Tests\Support\SpyLogger;
 use PHPUnit\Framework\TestCase;
 
 final class RunnerIntegrationTest extends TestCase
@@ -102,7 +102,7 @@ final class RunnerIntegrationTest extends TestCase
 
             self::assertSame(TaskStatus::SUCCEEDED->value, $row['task_status']);
             self::assertSame('runner attachment content', $row['payload_json']['attachmentRestoredContent']);
-            self::assertSame('file_attachment', $row['payload_json']['attachment']['__durable_type']);
+            self::assertSame('file_attachment', $row['payload_json']['attachment']['__php_tr_type']);
         } finally {
             @unlink($sourcePath);
             PostgresIntegrationConnection::dropTableIfExists($pdo, $tableName);
@@ -186,12 +186,12 @@ final class RunnerIntegrationTest extends TestCase
 
             self::assertSame((int) $record->taskId, $executingRecord['context']['taskId'] ?? null);
             self::assertSame(
-                \ByLexus\DurableTask\Tests\Fixture\QueueWorkflowStepFixture::class,
+                \ByLexus\TaskRunner\Tests\Fixture\QueueWorkflowStepFixture::class,
                 $executingRecord['context']['stepClass'] ?? null,
             );
             self::assertSame((int) $record->taskId, $stepUpdatedRecord['context']['taskId'] ?? null);
             self::assertSame(
-                \ByLexus\DurableTask\Tests\Fixture\QueueWorkflowStepFixture::class,
+                \ByLexus\TaskRunner\Tests\Fixture\QueueWorkflowStepFixture::class,
                 $stepUpdatedRecord['context']['stepClass'] ?? null,
             );
         } finally {

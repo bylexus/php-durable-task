@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask\Tests;
+namespace ByLexus\TaskRunner\Tests;
 
-use ByLexus\DurableTask\Enum\RetryMode;
-use ByLexus\DurableTask\Enum\RunnerMode;
-use ByLexus\DurableTask\Enum\StepStatus;
-use ByLexus\DurableTask\Enum\TaskStatus;
+use ByLexus\TaskRunner\Enum\RetryMode;
+use ByLexus\TaskRunner\Enum\RunnerMode;
+use ByLexus\TaskRunner\Enum\StepStatus;
+use ByLexus\TaskRunner\Enum\TaskStatus;
 use PHPUnit\Framework\TestCase;
 
 final class EnumTest extends TestCase

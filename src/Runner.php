@@ -2,30 +2,30 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask;
+namespace ByLexus\TaskRunner;
 
-use ByLexus\DurableTask\Attribute\CleanupAfter;
-use ByLexus\DurableTask\Enum\StepStatus;
-use ByLexus\DurableTask\Enum\TaskStatus;
-use ByLexus\DurableTask\Enum\RetryMode;
-use ByLexus\DurableTask\Exception\ConfigurationException;
-use ByLexus\DurableTask\Metadata\MetadataResolver;
-use ByLexus\DurableTask\Queue\PostgresQueue;
-use ByLexus\DurableTask\Queue\QueueConfiguration;
-use ByLexus\DurableTask\Queue\QueueRecord;
-use ByLexus\DurableTask\Queue\SchemaManager;
-use ByLexus\DurableTask\Result\ErrorInfo;
-use ByLexus\DurableTask\Result\StepResult;
-use ByLexus\DurableTask\Runtime\SignalHandler;
+use ByLexus\TaskRunner\Attribute\CleanupAfter;
+use ByLexus\TaskRunner\Enum\StepStatus;
+use ByLexus\TaskRunner\Enum\TaskStatus;
+use ByLexus\TaskRunner\Enum\RetryMode;
+use ByLexus\TaskRunner\Exception\ConfigurationException;
+use ByLexus\TaskRunner\Metadata\MetadataResolver;
+use ByLexus\TaskRunner\Queue\PostgresQueue;
+use ByLexus\TaskRunner\Queue\QueueConfiguration;
+use ByLexus\TaskRunner\Queue\QueueRecord;
+use ByLexus\TaskRunner\Queue\SchemaManager;
+use ByLexus\TaskRunner\Result\ErrorInfo;
+use ByLexus\TaskRunner\Result\StepResult;
+use ByLexus\TaskRunner\Runtime\SignalHandler;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
 /**
- * Executes durable task workflows.
+ * Executes task workflows.
  *
- * Coordinates queue access, step processing, and task lifecycle transitions for the durable task runner.
+ * Coordinates queue access, step processing, and task lifecycle transitions for the task runner.
  *
- * This file is part of bylexus/durable-task
+ * This file is part of bylexus/php-tr
  *
  * (c) Alexander Schenkel <info@alexi.ch>
  */
@@ -129,8 +129,8 @@ class Runner {
     }
 
     private function handleStopRequested(int $signal): void {
-        $signalName = match ($signal) {
-            SIGTERM => 'SIGTERM',
+        $signalName = match (true) {
+            $signal === SIGTERM => 'SIGTERM',
             defined('SIGINT') && $signal === SIGINT => 'SIGINT',
             default => sprintf('signal %d', $signal),
         };
@@ -515,8 +515,8 @@ class Runner {
         Task $task,
         StepResult $result,
         ?Step $nextStep,
-        \ByLexus\DurableTask\Metadata\TaskMetadata $taskMetadata,
-        \ByLexus\DurableTask\Enum\RetryMode $retryMode,
+        \ByLexus\TaskRunner\Metadata\TaskMetadata $taskMetadata,
+        \ByLexus\TaskRunner\Enum\RetryMode $retryMode,
         int $retries,
         \DateInterval $retryDelay,
     ): array {
@@ -537,7 +537,7 @@ class Runner {
 
         if (
             $result->getStatus() === StepStatus::FAILED
-            && $retryMode === \ByLexus\DurableTask\Enum\RetryMode::RESTART
+            && $retryMode === \ByLexus\TaskRunner\Enum\RetryMode::RESTART
             && $record->stepAttempt < $retries
         ) {
             $this->logger->warning('Runner requeued failed step for retry.', [
@@ -649,7 +649,7 @@ class Runner {
     }
 
     private function resolveCleanupAfterIntervalForStatus(
-        \ByLexus\DurableTask\Metadata\TaskMetadata $taskMetadata,
+        \ByLexus\TaskRunner\Metadata\TaskMetadata $taskMetadata,
         StepStatus $status,
     ): \DateInterval {
         if ($status === StepStatus::SUCCEEDED) {

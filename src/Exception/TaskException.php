@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace ByLexus\TaskRunner\Exception;
 
 /**
- * Signals queue operation failures.
+ * Base exception for task errors.
  *
- * Is thrown when the PostgreSQL-backed queue cannot persist or retrieve workflow records.
+ * Provides the common exception type used by the task framework.
  *
  * This file is part of bylexus/php-tr
  *
  * (c) Alexander Schenkel <info@alexi.ch>
  */
-class QueueException extends TaskException {
+class TaskException extends \RuntimeException {
 }

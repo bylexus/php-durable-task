@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask\Tests\Fixture;
+namespace ByLexus\TaskRunner\Tests\Fixture;
 
-use ByLexus\DurableTask\Attribute\CleanupAfter;
-use ByLexus\DurableTask\Step;
-use ByLexus\DurableTask\Task;
+use ByLexus\TaskRunner\Attribute\CleanupAfter;
+use ByLexus\TaskRunner\Step;
+use ByLexus\TaskRunner\Task;
 
 #[CleanupAfter(new \DateInterval('PT30S'), new \DateInterval('P7D'))]
 final class RetainedQueueWorkflowTaskFixture extends Task

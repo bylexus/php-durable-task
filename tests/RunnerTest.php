@@ -2,19 +2,19 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask\Tests;
+namespace ByLexus\TaskRunner\Tests;
 
-use ByLexus\DurableTask\Enum\RetryMode;
-use ByLexus\DurableTask\Enum\StepStatus;
-use ByLexus\DurableTask\Metadata\TaskMetadata;
-use ByLexus\DurableTask\Queue\QueueRecord;
-use ByLexus\DurableTask\Queue\PostgresQueue;
-use ByLexus\DurableTask\Result\ErrorInfo;
-use ByLexus\DurableTask\Result\StepResult;
-use ByLexus\DurableTask\Runner;
-use ByLexus\DurableTask\RunnerConfiguration;
-use ByLexus\DurableTask\Task;
-use ByLexus\DurableTask\Tests\Support\SpyLogger;
+use ByLexus\TaskRunner\Enum\RetryMode;
+use ByLexus\TaskRunner\Enum\StepStatus;
+use ByLexus\TaskRunner\Metadata\TaskMetadata;
+use ByLexus\TaskRunner\Queue\QueueRecord;
+use ByLexus\TaskRunner\Queue\PostgresQueue;
+use ByLexus\TaskRunner\Result\ErrorInfo;
+use ByLexus\TaskRunner\Result\StepResult;
+use ByLexus\TaskRunner\Runner;
+use ByLexus\TaskRunner\RunnerConfiguration;
+use ByLexus\TaskRunner\Task;
+use ByLexus\TaskRunner\Tests\Support\SpyLogger;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 
@@ -111,7 +111,7 @@ final class RunnerTest extends TestCase
             new RunnerConfiguration('runner-test'),
         );
         $task = new class extends Task {
-            public function nextStep(?\ByLexus\DurableTask\Step $actStep = null): ?\ByLexus\DurableTask\Step {
+            public function nextStep(?\ByLexus\TaskRunner\Step $actStep = null): ?\ByLexus\TaskRunner\Step {
                 return null;
             }
         };

@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use ByLexus\DurableTask\Queue\QueueConfiguration;
-use ByLexus\DurableTask\Queue\SchemaManager;
+use ByLexus\TaskRunner\Queue\QueueConfiguration;
+use ByLexus\TaskRunner\Queue\SchemaManager;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
 

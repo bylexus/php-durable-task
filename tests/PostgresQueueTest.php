@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask\Tests;
+namespace ByLexus\TaskRunner\Tests;
 
-use ByLexus\DurableTask\Queue\PostgresQueue;
-use ByLexus\DurableTask\Queue\QueueConfiguration;
+use ByLexus\TaskRunner\Queue\PostgresQueue;
+use ByLexus\TaskRunner\Queue\QueueConfiguration;
 use PHPUnit\Framework\TestCase;
 
 final class PostgresQueueTest extends TestCase

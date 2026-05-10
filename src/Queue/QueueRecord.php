@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask\Queue;
+namespace ByLexus\TaskRunner\Queue;
 
 /**
  * Represents a persisted queue record.
  *
  * Carries the database-backed state for a task and its currently active step.
  *
- * This file is part of bylexus/durable-task
+ * This file is part of bylexus/php-tr
  *
  * (c) Alexander Schenkel <info@alexi.ch>
  */

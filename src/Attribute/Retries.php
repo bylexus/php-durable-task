@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask\Attribute;
+namespace ByLexus\TaskRunner\Attribute;
 
 /**
  * Declares automatic retry count.
  *
  * Defines how many retry attempts a task or step may perform and how long to wait before retrying.
  *
- * This file is part of bylexus/durable-task
+ * This file is part of bylexus/php-tr
  *
  * (c) Alexander Schenkel <info@alexi.ch>
  */

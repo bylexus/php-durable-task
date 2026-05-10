@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask\Tests\Support;
+namespace ByLexus\TaskRunner\Tests\Support;
 
 use Psr\Container\ContainerInterface;
 

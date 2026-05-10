@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask\Result;
+namespace ByLexus\TaskRunner\Result;
 
-use ByLexus\DurableTask\Enum\StepStatus;
-use ByLexus\DurableTask\Exception\ConfigurationException;
+use ByLexus\TaskRunner\Enum\StepStatus;
+use ByLexus\TaskRunner\Exception\ConfigurationException;
 
 /**
  * Represents a step execution result.
  *
  * Carries the outcome, message, metadata, and optional error information produced by a workflow step.
  *
- * This file is part of bylexus/durable-task
+ * This file is part of bylexus/php-tr
  *
  * (c) Alexander Schenkel <info@alexi.ch>
  */

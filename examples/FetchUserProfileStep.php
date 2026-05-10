@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-use ByLexus\DurableTask\Attribute\MaxRuntime;
-use ByLexus\DurableTask\Attribute\Retries;
-use ByLexus\DurableTask\Attribute\RetryMode as RetryModeAttribute;
-use ByLexus\DurableTask\Enum\RetryMode;
-use ByLexus\DurableTask\Result\ErrorInfo;
-use ByLexus\DurableTask\Result\StepResult;
-use ByLexus\DurableTask\Step;
-use ByLexus\DurableTask\Task;
+use ByLexus\TaskRunner\Attribute\MaxRuntime;
+use ByLexus\TaskRunner\Attribute\Retries;
+use ByLexus\TaskRunner\Attribute\RetryMode as RetryModeAttribute;
+use ByLexus\TaskRunner\Enum\RetryMode;
+use ByLexus\TaskRunner\Result\ErrorInfo;
+use ByLexus\TaskRunner\Result\StepResult;
+use ByLexus\TaskRunner\Step;
+use ByLexus\TaskRunner\Task;
 use Psr\Log\LoggerInterface;
 
 require_once __DIR__ . '/FrameworkDemoContainer.php';
@@ -37,7 +37,7 @@ final class FetchUserProfileStep extends Step {
 
             return StepResult::succeeded(message: 'Profile fetched from upstream service.');
         } catch (Throwable $throwable) {
-            // Returning a failed result keeps the failure structured in the durable queue row.
+            // Returning a failed result keeps the failure structured in the queue row.
             return StepResult::failed(
                 new ErrorInfo((int) $throwable->getCode(), $throwable->getMessage()),
                 message: $throwable->getMessage(),

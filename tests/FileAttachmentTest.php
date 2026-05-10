@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask\Tests;
+namespace ByLexus\TaskRunner\Tests;
 
-use ByLexus\DurableTask\FileAttachment;
+use ByLexus\TaskRunner\FileAttachment;
 use PHPUnit\Framework\TestCase;
 
 final class FileAttachmentTest extends TestCase

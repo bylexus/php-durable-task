@@ -1,8 +1,8 @@
 <?php
 
-use ByLexus\DurableTask\Attribute\CleanupAfter;
-use ByLexus\DurableTask\Step;
-use ByLexus\DurableTask\Task;
+use ByLexus\TaskRunner\Attribute\CleanupAfter;
+use ByLexus\TaskRunner\Step;
+use ByLexus\TaskRunner\Task;
 use PHPMailer\PHPMailer\PHPMailer;
 use Psr\Log\LoggerInterface;
 

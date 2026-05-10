@@ -2,20 +2,20 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask\Tests\Integration;
+namespace ByLexus\TaskRunner\Tests\Integration;
 
-use ByLexus\DurableTask\Enum\StepStatus;
-use ByLexus\DurableTask\Enum\TaskStatus;
-use ByLexus\DurableTask\FileAttachment;
-use ByLexus\DurableTask\Exception\QueueException;
-use ByLexus\DurableTask\Queue\AttachmentBlobStore;
-use ByLexus\DurableTask\Queue\PostgresQueue;
-use ByLexus\DurableTask\Queue\QueueConfiguration;
-use ByLexus\DurableTask\Queue\QueueRecord;
-use ByLexus\DurableTask\Queue\SchemaManager;
-use ByLexus\DurableTask\Task;
-use ByLexus\DurableTask\Tests\Fixture\QueueWorkflowTaskFixture;
-use ByLexus\DurableTask\Tests\Support\PostgresIntegrationConnection;
+use ByLexus\TaskRunner\Enum\StepStatus;
+use ByLexus\TaskRunner\Enum\TaskStatus;
+use ByLexus\TaskRunner\FileAttachment;
+use ByLexus\TaskRunner\Exception\QueueException;
+use ByLexus\TaskRunner\Queue\AttachmentBlobStore;
+use ByLexus\TaskRunner\Queue\PostgresQueue;
+use ByLexus\TaskRunner\Queue\QueueConfiguration;
+use ByLexus\TaskRunner\Queue\QueueRecord;
+use ByLexus\TaskRunner\Queue\SchemaManager;
+use ByLexus\TaskRunner\Task;
+use ByLexus\TaskRunner\Tests\Fixture\QueueWorkflowTaskFixture;
+use ByLexus\TaskRunner\Tests\Support\PostgresIntegrationConnection;
 use PHPUnit\Framework\TestCase;
 
 final class PostgresQueueIntegrationTest extends TestCase
@@ -173,7 +173,7 @@ final class PostgresQueueIntegrationTest extends TestCase
             self::assertInstanceOf(\stdClass::class, $rehydratedTask->getPayload());
             self::assertInstanceOf(QueueWorkflowTaskFixture::class, $rehydratedTask);
             self::assertInstanceOf(
-                \ByLexus\DurableTask\Tests\Fixture\QueueWorkflowStepFixture::class,
+                \ByLexus\TaskRunner\Tests\Fixture\QueueWorkflowStepFixture::class,
                 $rehydratedTask->actualStep(),
             );
         } finally {
@@ -203,7 +203,7 @@ final class PostgresQueueIntegrationTest extends TestCase
 
             $row = $this->fetchTaskRow($pdo, $tableName, (int) $record->taskId);
 
-            self::assertSame('file_attachment', $row['payload_json']['attachment']['__durable_type']);
+            self::assertSame('file_attachment', $row['payload_json']['attachment']['__php_tr_type']);
             self::assertSame(basename($sourcePath), $row['payload_json']['attachment']['name']);
             self::assertSame(1, $this->blobCountForTask($pdo, $configuration, (int) $record->taskId));
 
@@ -251,8 +251,8 @@ final class PostgresQueueIntegrationTest extends TestCase
 
             $row = $this->fetchTaskRow($pdo, $tableName, (int) $record->taskId);
 
-            self::assertSame('file_attachment', $row['payload_json']['details']['primary']['__durable_type']);
-            self::assertSame('file_attachment', $row['payload_json']['files'][0]['__durable_type']);
+            self::assertSame('file_attachment', $row['payload_json']['details']['primary']['__php_tr_type']);
+            self::assertSame('file_attachment', $row['payload_json']['files'][0]['__php_tr_type']);
 
             $rehydratedTask = Task::fromQueueRecord(
                 $this->fetchQueueRecord($pdo, $tableName, (int) $record->taskId),
@@ -483,7 +483,7 @@ final class PostgresQueueIntegrationTest extends TestCase
         \PDO $pdo,
         QueueConfiguration $configuration,
         array $payload,
-    ): \ByLexus\DurableTask\Queue\QueueRecord {
+    ): \ByLexus\TaskRunner\Queue\QueueRecord {
         $task = new QueueWorkflowTaskFixture();
         $task->setPayload($payload);
 

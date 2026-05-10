@@ -1,11 +1,11 @@
 <?php
 
-use ByLexus\DurableTask\Enum\StepStatus;
-use ByLexus\DurableTask\FileAttachment;
-use ByLexus\DurableTask\Result\ErrorInfo;
-use ByLexus\DurableTask\Result\StepResult;
-use ByLexus\DurableTask\Step;
-use ByLexus\DurableTask\Task;
+use ByLexus\TaskRunner\Enum\StepStatus;
+use ByLexus\TaskRunner\FileAttachment;
+use ByLexus\TaskRunner\Result\ErrorInfo;
+use ByLexus\TaskRunner\Result\StepResult;
+use ByLexus\TaskRunner\Step;
+use ByLexus\TaskRunner\Task;
 
 class ResizeFileStep extends Step {
     public function execute(Task $task): StepResult {

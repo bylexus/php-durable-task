@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask\Tests\Integration;
+namespace ByLexus\TaskRunner\Tests\Integration;
 
-use ByLexus\DurableTask\Queue\QueueConfiguration;
-use ByLexus\DurableTask\Queue\SchemaManager;
-use ByLexus\DurableTask\Tests\Support\PostgresIntegrationConnection;
+use ByLexus\TaskRunner\Queue\QueueConfiguration;
+use ByLexus\TaskRunner\Queue\SchemaManager;
+use ByLexus\TaskRunner\Tests\Support\PostgresIntegrationConnection;
 use PHPUnit\Framework\TestCase;
 
 final class SchemaManagerIntegrationTest extends TestCase

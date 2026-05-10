@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask\Tests\Fixture;
+namespace ByLexus\TaskRunner\Tests\Fixture;
 
-use ByLexus\DurableTask\Attribute\MaxRuntime;
-use ByLexus\DurableTask\Result\StepResult;
-use ByLexus\DurableTask\Step;
-use ByLexus\DurableTask\Task;
+use ByLexus\TaskRunner\Attribute\MaxRuntime;
+use ByLexus\TaskRunner\Result\StepResult;
+use ByLexus\TaskRunner\Step;
+use ByLexus\TaskRunner\Task;
 
 #[MaxRuntime(new \DateInterval('PT1S'))]
 final class RunnerTimeoutStepFixture extends Step

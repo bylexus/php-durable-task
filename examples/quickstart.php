@@ -2,31 +2,31 @@
 
 declare(strict_types=1);
 
-use ByLexus\DurableTask\Attribute\CleanupAfter;
-use ByLexus\DurableTask\Queue\SchemaManager;
-use ByLexus\DurableTask\Result\StepResult;
-use ByLexus\DurableTask\Runner;
-use ByLexus\DurableTask\RunnerConfiguration;
-use ByLexus\DurableTask\Step;
-use ByLexus\DurableTask\Task;
+use ByLexus\TaskRunner\Attribute\CleanupAfter;
+use ByLexus\TaskRunner\Queue\SchemaManager;
+use ByLexus\TaskRunner\Result\StepResult;
+use ByLexus\TaskRunner\Runner;
+use ByLexus\TaskRunner\RunnerConfiguration;
+use ByLexus\TaskRunner\Step;
+use ByLexus\TaskRunner\Task;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
 
 // Keep connection settings overridable so the example can run unchanged in local setups.
-$dsn = getenv('DURABLE_TASK_DSN') ?: 'pgsql:host=127.0.0.1;port=5432;dbname=durable_task_test';
-$user = getenv('DURABLE_TASK_DB_USER') ?: 'postgres';
-$password = getenv('DURABLE_TASK_DB_PASS') ?: 'postgres';
+$dsn = getenv('PHP_TR_DSN') ?: 'pgsql:host=127.0.0.1;port=5432;dbname=php_tr_test';
+$user = getenv('PHP_TR_DB_USER') ?: 'postgres';
+$password = getenv('PHP_TR_DB_PASS') ?: 'postgres';
 
 final class PrintGreetingStep extends Step {
     // Implement the execute function to execute the work:
     public function execute(Task $task): StepResult {
-        // Steps read input from the durable task payload.
+        // Steps read input from the task payload.
         // It is advisable to use a namespaced payload, as all steps of a task share
         // the same Payload object. Here, we use the class name as namespace:
         $name = $this->name($task);
 
         // Do the work!
-        fwrite(STDOUT, sprintf("Hello %s from a durable step.\n", $name));
+        fwrite(STDOUT, sprintf("Hello %s from a step.\n", $name));
 
         // and return a result:
         return StepResult::succeeded(message: 'Greeting printed.');
@@ -58,7 +58,7 @@ final class GreetingTask extends Task {
     // it receives the actual (done) step and can now return the next (configured) step.
     // Returning null means the flow is done:
     public function nextStep(?Step $actStep = null): ?Step {
-        // Returning null ends the workflow. Returning a step queues the next durable unit of work.
+        // Returning null ends the workflow. Returning a step queues the next unit of work.
         return $actStep === null ? new PrintGreetingStep() : null;
     }
 }
@@ -68,7 +68,7 @@ $pdo = new PDO($dsn, $user, $password);
 (new SchemaManager($pdo))->bootstrap();
 
 // The task owns the payload. Here we seed it before enqueueing the first step.
-$task = (new GreetingTask())->withName($argv[1] ?? 'durable tasks');
+$task = (new GreetingTask())->withName($argv[1] ?? 'PHP TR');
 $record = $task->enqueue($pdo);
 
 // A runner claims one queued row, hydrates the task and step, executes them, and persists the result.

@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask\Queue;
+namespace ByLexus\TaskRunner\Queue;
 
-use ByLexus\DurableTask\Exception\ConfigurationException;
-use ByLexus\DurableTask\Exception\SerializationException;
+use ByLexus\TaskRunner\Exception\ConfigurationException;
+use ByLexus\TaskRunner\Exception\SerializationException;
 use PDO;
 
 /**
@@ -13,7 +13,7 @@ use PDO;
  *
  * Persists and restores the raw bytes referenced by FileAttachment payload metadata.
  *
- * This file is part of bylexus/durable-task
+ * This file is part of bylexus/php-tr
  *
  * (c) Alexander Schenkel <info@alexi.ch>
  */

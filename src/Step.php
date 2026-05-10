@@ -2,23 +2,23 @@
 
 declare(strict_types=1);
 
-namespace ByLexus\DurableTask;
+namespace ByLexus\TaskRunner;
 
-use ByLexus\DurableTask\Enum\StepStatus;
-use ByLexus\DurableTask\Exception\ConfigurationException;
-use ByLexus\DurableTask\Queue\QueueRecord;
-use ByLexus\DurableTask\Result\StepResult;
-use ByLexus\DurableTask\Runtime\ClassInstantiator;
-use ByLexus\DurableTask\Runtime\ContextualLogger;
+use ByLexus\TaskRunner\Enum\StepStatus;
+use ByLexus\TaskRunner\Exception\ConfigurationException;
+use ByLexus\TaskRunner\Queue\QueueRecord;
+use ByLexus\TaskRunner\Result\StepResult;
+use ByLexus\TaskRunner\Runtime\ClassInstantiator;
+use ByLexus\TaskRunner\Runtime\ContextualLogger;
 use Psr\Container\ContainerInterface;
 use Psr\Log\LoggerInterface;
 
 /**
  * Base class for workflow steps.
  *
- * Provides step state management, retry coordination, and payload handoff for durable task workflows.
+ * Provides step state management, retry coordination, and payload handoff for task workflows.
  *
- * This file is part of bylexus/durable-task
+ * This file is part of bylexus/php-tr
  *
  * (c) Alexander Schenkel <info@alexi.ch>
  */

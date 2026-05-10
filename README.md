@@ -1,8 +1,8 @@
-# Durable Task for PHP
+# PHP Task Runner - a Queue / Task Runner for background tasks
 
 ⚠️ Work in progress! Use with caution for now! ⚠️
 
-Durable Task is a PostgreSQL-backed workflow library for PHP >= 8.3. It is meant to queue and run jobs that are to be processed in the background (e.g. queue an email to be sent).
+PHP Task Runner is a PostgreSQL-backed workflow library for PHP >= 8.3. It is meant to queue and run jobs that are to be processed in the background of a frontend application (e.g. queue an email to be sent in the background).
 
 You model work as a `Task` that defines a workflow consisting of `Step`s. Enqueued Tasks then get worked on step-by-step by a Runner. The library stores the Tasks and Steps state in the database so work can survive worker restarts and multiple runner processes can safely compete for queued work.
 
@@ -10,7 +10,7 @@ The public surface is intentionally small and framework agnostic:
 
 - `Task` defines the workflow, consisting of Steps and owns the payload needed to process the steps.
 - `Step` executes one unit of work and returns a `StepResult`.
-- `Runner` claims queued Tasks/Steps, executes them, and persists the next durable state.
+- `Runner` claims queued Tasks/Steps, executes them, and persists the next state.
 
 `Task` and `Step` classes are kept separately, with the goal that single-purpose `Step` classes can be mixed and matched by several `Task` classes. For example, a generic `SendMail` step can be used by many tasks to send information emails.
 
@@ -26,7 +26,7 @@ This README is written for experienced PHP developers who want to integrate the 
 ## Installation
 
 ```bash
-composer require bylexus/durable-task
+composer require bylexus/php-tr
 ```
 
 ## Quickstart
@@ -41,14 +41,14 @@ This quickstart just implements a single Task with a single Step to work on. Thi
 Use [composer](https://getcomposer.org/):
 
 ```sh
-$ composer require bylexus/durable-task
+$ composer require bylexus/php-tr
 ```
 
 Create the DB objects (1 table, some indexes), either by invoking the SchemaManager:
 
 ```php
 
-use ByLexus\DurableTask\Queue\SchemaManager;
+use ByLexus\TaskRunner\Queue\SchemaManager;
 
 // Use the Schema Manager with your existing PostgreSQL PDO connection:
 (new SchemaManager($pdo))->bootstrap();
@@ -58,7 +58,7 @@ or by dumping the needed SQLs:
 
 ```sh
 # Just dump the needed SQLs:
-$ php vendor/bylexus/durable-task/bin/dump-schema.php
+$ php vendor/bylexus/php-tr/bin/dump-schema.php
 ```
 
 ### Create a Step class
@@ -66,20 +66,20 @@ $ php vendor/bylexus/durable-task/bin/dump-schema.php
 First you define one (or multiple) single-purpose Step classes. Steps are one piece of work that can be used in a / multiple Task. Here, we create a simple Step that just prints a message:
 
 ```php
-use ByLexus\DurableTask\Step;
-use ByLexus\DurableTask\Task;
-use ByLexus\DurableTask\Result\StepResult;
+use ByLexus\TaskRunner\Step;
+use ByLexus\TaskRunner\Task;
+use ByLexus\TaskRunner\Result\StepResult;
 
 final class PrintGreetingStep extends Step {
     // Implement the execute function to execute the work:
     public function execute(Task $task): StepResult {
-        // Steps read input from the durable task payload.
+        // Steps read input from the task payload.
         // It is advisable to use a namespaced payload, as all steps of a task share
         // the same Payload object. Here, we use the class name as namespace:
         $name = $this->name($task);
 
         // Do the work!
-        fwrite(STDOUT, sprintf("Hello %s from a durable step.\n", $name));
+        fwrite(STDOUT, sprintf("Hello %s from a step.\n", $name));
 
         // and return a result:
         return StepResult::succeeded(message: 'Greeting printed.');
@@ -101,9 +101,9 @@ Now, define the `Task` class to define your workflow: Define the needed payload 
 and create a workflow in the `nextStep` function:
 
 ```php
-use ByLexus\DurableTask\Step;
-use ByLexus\DurableTask\Task;
-use ByLexus\DurableTask\Attribute\CleanupAfter;
+use ByLexus\TaskRunner\Step;
+use ByLexus\TaskRunner\Task;
+use ByLexus\TaskRunner\Attribute\CleanupAfter;
 
 #[CleanupAfter(new DateInterval('PT10M'), new DateInterval('P7D'))]
 final class GreetingTask extends Task {
@@ -123,7 +123,7 @@ final class GreetingTask extends Task {
     // it receives the actual (done) step and can now return the next (configured) step.
     // Returning null means the flow is done:
     public function nextStep(?Step $actStep = null): ?Step {
-        // Returning null ends the workflow. Returning a step queues the next durable unit of work.
+        // Returning null ends the workflow. Returning a step queues the next unit of work.
         return $actStep === null ? new PrintGreetingStep() : null;
     }
 }
@@ -145,8 +145,8 @@ $task->enqueue($pdo, priority: Task::PRIO_HIGH);
 If you want to keep the queue connection and queue configuration together, create a `QueueContext` once and reuse it:
 
 ```php
-use ByLexus\DurableTask\Queue\QueueConfiguration;
-use ByLexus\DurableTask\QueueContext;
+use ByLexus\TaskRunner\Queue\QueueConfiguration;
+use ByLexus\TaskRunner\QueueContext;
 
 $queueConfiguration = new QueueConfiguration('app_background_jobs', 'background_jobs');
 $queue = new QueueContext($pdo, $queueConfiguration);
@@ -169,8 +169,8 @@ When multiple queued tasks are available, runners claim the highest-priority wor
 A Runner can now be instantiated in a separate script, e.g. a script that runs server-side as a daemon:
 
 ```php
-use ByLexus\DurableTask\Runner;
-use ByLexus\DurableTask\RunnerConfiguration;
+use ByLexus\TaskRunner\Runner;
+use ByLexus\TaskRunner\RunnerConfiguration;
 
 // A runner claims one queued row, hydrates the task and step, executes them, and persists the result.
 $runner = new Runner(
@@ -185,9 +185,9 @@ $processed = $runner->runLoop();
 With `QueueContext`, the same setup becomes:
 
 ```php
-use ByLexus\DurableTask\Queue\QueueConfiguration;
-use ByLexus\DurableTask\QueueContext;
-use ByLexus\DurableTask\RunnerConfiguration;
+use ByLexus\TaskRunner\Queue\QueueConfiguration;
+use ByLexus\TaskRunner\QueueContext;
+use ByLexus\TaskRunner\RunnerConfiguration;
 
 $queueConfiguration = new QueueConfiguration('app_background_jobs', 'background_jobs');
 $queue = new QueueContext($pdo, $queueConfiguration);
@@ -197,7 +197,7 @@ $runner->runLoop();
 
 ## Concepts
 
-### `Task` is the durable workflow instance
+### `Task` is the workflow instance
 
 A task is the long-lived object stored in the queue row. It owns the payload (arbitary data for the steps) and decides the workflow graph through `nextStep()`.
 
@@ -214,7 +214,7 @@ Important points:
 - The runner persists the task payload after every step execution.
 - The runner calls `nextStep()` of your task to fetch the next work unit. Return `null` to indicate done.
 
-### `Step` is one durable unit of work
+### `Step` is one unit of work
 
 Every step implements `execute(Task $task): StepResult`.
 
@@ -255,7 +255,7 @@ You can safely start multiple runners, as each task can only be claimed by one r
 Each queued task row stores a numeric priority. Priority `1` is the highest priority and `5` is the lowest. If you do not pass a priority when enqueueing, the library stores `3`.
 
 ```php
-use ByLexus\DurableTask\Task;
+use ByLexus\TaskRunner\Task;
 
 $task = (new WelcomeTask())->withEmail('ada@example.com');
 
@@ -273,9 +273,9 @@ This is the smallest useful pattern:
 
 declare(strict_types=1);
 
-use ByLexus\DurableTask\Result\StepResult;
-use ByLexus\DurableTask\Step;
-use ByLexus\DurableTask\Task;
+use ByLexus\TaskRunner\Result\StepResult;
+use ByLexus\TaskRunner\Step;
+use ByLexus\TaskRunner\Task;
 
 final class SendWelcomeMailStep extends Step {
     public function execute(Task $task): StepResult {
@@ -317,7 +317,7 @@ Often you want to use files as part of your workflow (e.g. send emails with atta
 Use `FileAttachment` to attach files directly in the task payload. The queue stores only metadata plus a blob reference in `payload_json`; the binary content itself is stored in the attachment blob table that `SchemaManager` creates together with the main queue table.
 
 ```php
-use ByLexus\DurableTask\FileAttachment;
+use ByLexus\TaskRunner\FileAttachment;
 
 $task->getPayload()->mail = (object) [
     'to' => 'alex@example.com',
@@ -328,9 +328,9 @@ $task->getPayload()->mail = (object) [
 Inside a step, the hydrated payload value is again a `FileAttachment` object, so you can restore it to a local file when your mailer or external service needs a path:
 
 ```php
-use ByLexus\DurableTask\Result\StepResult;
-use ByLexus\DurableTask\Step;
-use ByLexus\DurableTask\Task;
+use ByLexus\TaskRunner\Result\StepResult;
+use ByLexus\TaskRunner\Step;
+use ByLexus\TaskRunner\Task;
 
 final class SendMailStep extends Step {
     public function execute(Task $task): StepResult {
@@ -355,7 +355,7 @@ The queue uses one PostgreSQL table plus indexes. You have three supported ways 
 Use this when your framework has an installation command, deploy hook, or startup sequence.
 
 ```php
-use ByLexus\DurableTask\Queue\SchemaManager;
+use ByLexus\TaskRunner\Queue\SchemaManager;
 
 (new SchemaManager($pdo))->bootstrap();
 ```
@@ -363,8 +363,8 @@ use ByLexus\DurableTask\Queue\SchemaManager;
 If you already use a `QueueContext`, the same wrapper can also manage the schema for that queue:
 
 ```php
-use ByLexus\DurableTask\Queue\QueueConfiguration;
-use ByLexus\DurableTask\QueueContext;
+use ByLexus\TaskRunner\Queue\QueueConfiguration;
+use ByLexus\TaskRunner\QueueContext;
 
 $queueConfiguration = new QueueConfiguration('app_background_jobs', 'background_jobs');
 $queue = new QueueContext($pdo, $queueConfiguration);
@@ -390,8 +390,8 @@ This prints the exact `CREATE TABLE` and `CREATE INDEX` statements for the confi
 ### 3. Let the runner bootstrap once at startup
 
 ```php
-use ByLexus\DurableTask\RunnerConfiguration;
-use ByLexus\DurableTask\Runner;
+use ByLexus\TaskRunner\RunnerConfiguration;
+use ByLexus\TaskRunner\Runner;
 
 $runnerConfiguration = new RunnerConfiguration(
     bootstrapSchemaOnStart: true,
@@ -406,8 +406,8 @@ This is useful for local development or controlled deployments. It is optional a
 Use `QueueConfiguration` when you want more than one queue table, need a non-default name, or want to place queue objects in a dedicated PostgreSQL schema.
 
 ```php
-use ByLexus\DurableTask\Queue\QueueConfiguration;
-use ByLexus\DurableTask\QueueContext;
+use ByLexus\TaskRunner\Queue\QueueConfiguration;
+use ByLexus\TaskRunner\QueueContext;
 
 $queueConfiguration = new QueueConfiguration('app_background_jobs');
 
@@ -493,8 +493,8 @@ Typical worker bootstrap:
 
 declare(strict_types=1);
 
-use ByLexus\DurableTask\Runner;
-use ByLexus\DurableTask\RunnerConfiguration;
+use ByLexus\TaskRunner\Runner;
+use ByLexus\TaskRunner\RunnerConfiguration;
 use Psr\Log\LoggerInterface;
 
 $container = $app->getContainer();
@@ -551,11 +551,11 @@ Example:
 
 declare(strict_types=1);
 
-use ByLexus\DurableTask\Attribute\CleanupAfter;
-use ByLexus\DurableTask\Attribute\MaxRuntime;
-use ByLexus\DurableTask\Attribute\Retries;
-use ByLexus\DurableTask\Attribute\RetryMode;
-use ByLexus\DurableTask\Enum\RetryMode as RetryModeEnum;
+use ByLexus\TaskRunner\Attribute\CleanupAfter;
+use ByLexus\TaskRunner\Attribute\MaxRuntime;
+use ByLexus\TaskRunner\Attribute\Retries;
+use ByLexus\TaskRunner\Attribute\RetryMode;
+use ByLexus\TaskRunner\Enum\RetryMode as RetryModeEnum;
 
 #[CleanupAfter(new DateInterval('PT6H'), new DateInterval('P7D'))]
 #[Retries(5, new DateInterval('PT2M'))]
@@ -621,7 +621,7 @@ This example shows:
 
 - PostgreSQL is the queue backend. There is no abstraction for other databases yet.
 - Task and step classes are re-instantiated from the class names stored in the queue row, so workers must have the same code and autoload configuration as producers.
-- The queue is durable, but idempotency is still your responsibility. If a step talks to an external system, design it so retries or restarts do not create incorrect side effects.
+- Tasks / Steps are restartable (e.g. retry after failure), but idempotency is still your responsibility. If a step talks to an external system, design it so retries or restarts do not create incorrect side effects.
 - `runLoop()` is a worker process, not a scheduler. You still decide how your application starts and supervises workers.
 - The queue cleanup process deletes terminal rows only after their `cleanup_at` deadline.
 
@@ -629,7 +629,7 @@ This example shows:
 
 This library is a good fit when you want:
 
-- durable background workflows inside an existing PHP application
+- background workflows inside an existing PHP application
 - multi-step jobs whose state should live in PostgreSQL
 - explicit code-level workflow definitions instead of a generic queue payload protocol
 - direct integration with your framework container and logger
