@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ByLexus\TaskRunner;
 
 use ByLexus\TaskRunner\Exception\ConfigurationException;
+use ByLexus\TaskRunner\Exception\QueueException;
 use ByLexus\TaskRunner\Exception\SerializationException;
 use ByLexus\TaskRunner\Queue\AttachmentBlobStore;
 
@@ -112,11 +113,11 @@ final class FileAttachment {
         }
 
         if ($this->blobId === null) {
-            throw new ConfigurationException('Attachment content is not available.');
+            throw new QueueException('Attachment content is not available.');
         }
 
         if ($this->blobStore === null) {
-            throw new ConfigurationException('Attachment blob store is not bound.');
+            throw new QueueException('Attachment blob store is not bound.');
         }
 
         $this->content = $this->blobStore->read($this->blobId);

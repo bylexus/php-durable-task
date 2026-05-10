@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ByLexus\TaskRunner\Queue;
 
 use ByLexus\TaskRunner\Exception\ConfigurationException;
+use ByLexus\TaskRunner\Exception\QueueException;
 use ByLexus\TaskRunner\Exception\SerializationException;
 use PDO;
 
@@ -64,7 +65,7 @@ final class AttachmentBlobStore {
         $content = $statement->fetchColumn();
 
         if ($content === false) {
-            throw new ConfigurationException(sprintf('Attachment blob %d could not be found.', $blobId));
+            throw new QueueException(sprintf('Attachment blob %d could not be found.', $blobId));
         }
 
         if (is_resource($content)) {
