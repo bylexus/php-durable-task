@@ -1,6 +1,8 @@
 # PHP Task Runner - a Queue / Task Runner for background tasks
 
-⚠️ Work in progress! Use with caution for now! ⚠️
+[![Build Test](https://github.com/bylexus/php-tr/actions/workflows/build-test.yml/badge.svg)](https://github.com/bylexus/php-tr/actions/workflows/build-test.yml)
+
+⚠️ **Work in progress! Use with caution for now! Very early version!** ⚠️
 
 PHP Task Runner is a database-backed workflow library for PHP >= 8.3. It is meant to queue and run jobs that are to be processed in the background of a frontend application (e.g. queue an email to be sent in the background).
 
