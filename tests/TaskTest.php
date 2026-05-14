@@ -54,6 +54,69 @@ final class TaskTest extends TestCase
         self::assertSame(TaskStatus::CANCELLED, $task->getStatus());
     }
 
+    public function testReloadRefreshesCancellationStateFromDatabase(): void {
+        $environment = $this->createSqliteTaskEnvironment();
+        $record = (new QueueWorkflowTaskFixture())->enqueue($environment);
+
+        self::assertNotNull($record->taskId);
+
+        $runningTask = $environment->getTask((int) $record->taskId);
+        $controlTask = $environment->getTask((int) $record->taskId);
+
+        $controlTask->cancel('Cancelled remotely.');
+
+        self::assertFalse($runningTask->isCancelRequested());
+
+        $runningTask->reload();
+
+        self::assertTrue($runningTask->isCancelRequested());
+        self::assertSame('Cancelled remotely.', $runningTask->getCancelReason());
+        self::assertSame(TaskStatus::CANCELLED, $runningTask->getStatus());
+    }
+
+    public function testPersistPayloadStoresOnlyPayloadChanges(): void {
+        $environment = $this->createSqliteTaskEnvironment();
+        $record = (new QueueWorkflowTaskFixture())->enqueue($environment);
+
+        self::assertNotNull($record->taskId);
+
+        $task = $environment->getTask((int) $record->taskId);
+
+        self::assertSame(TaskStatus::QUEUED, $task->getStatus());
+        self::assertSame(StepStatus::QUEUED, $task->actualStep()?->getStatus());
+
+        $task->getPayload()->checkpoint = 'phase-1';
+        $task->persistPayload();
+
+        $reloaded = $environment->getTask((int) $record->taskId);
+
+        self::assertSame('phase-1', $reloaded->getPayload()->checkpoint);
+        self::assertSame(TaskStatus::QUEUED, $reloaded->getStatus());
+        self::assertSame(StepStatus::QUEUED, $reloaded->actualStep()?->getStatus());
+    }
+
+    public function testReloadFailsForDetachedTask(): void {
+        $task = new QueueWorkflowTaskFixture();
+
+        $this->expectException(ConfigurationException::class);
+        $this->expectExceptionMessage(
+            'ByLexus\\TaskRunner\\Task::reload requires an enqueued task bound to a database queue.',
+        );
+
+        $task->reload();
+    }
+
+    public function testPersistPayloadFailsForDetachedTask(): void {
+        $task = new QueueWorkflowTaskFixture();
+
+        $this->expectException(ConfigurationException::class);
+        $this->expectExceptionMessage(
+            'ByLexus\\TaskRunner\\Task::persistPayload requires an enqueued task bound to a database queue.',
+        );
+
+        $task->persistPayload();
+    }
+
     public function testTaskCanBeReconstitutedFromQueueRecord(): void {
         $record = new QueueRecord(
             42,
@@ -575,5 +638,15 @@ final class TaskTest extends TestCase
         }
 
         self::fail(sprintf('Expected log record was not found: %s [%s]', $message, $level));
+    }
+
+    private function createSqliteTaskEnvironment(): TaskEnvironment {
+        $pdo = new \PDO('sqlite::memory:');
+        $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+
+        $environment = new TaskEnvironment($pdo);
+        $environment->getSchemaManager()->bootstrap();
+
+        return $environment;
     }
 }

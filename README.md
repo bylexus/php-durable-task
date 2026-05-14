@@ -307,8 +307,60 @@ Payload access patterns:
 - `$task->getPayload(SomeStep::class)` returns a namespaced child object for one step or concern.
 - `$task->setPayload($payload)` replaces the root payload.
 - `$task->setPayload(SomeStep::class, $value)` sets a namespaced payload fragment.
+- `$task->reload()` refreshes task state (including cancellation flags and payload) from the database.
+- `$task->persistPayload()` stores only the current payload to the queue row.
 
 The namespaced payload pattern is usually the cleanest way to avoid collisions between steps in a larger workflow.
+
+### Long-running step pattern (reload, cancellation checks, payload checkpoints)
+
+When a step can run for a long time, call `reload()` at checkpoints to inspect fresh state from the queue,
+stop early when cancellation was requested, and optionally persist incremental payload data.
+
+```php
+<?php
+
+declare(strict_types=1);
+
+use ByLexus\TaskRunner\Result\ErrorInfo;
+use ByLexus\TaskRunner\Result\StepResult;
+use ByLexus\TaskRunner\Step;
+use ByLexus\TaskRunner\Task;
+
+final class ProcessLargeImportStep extends Step {
+    public function execute(Task $task): StepResult {
+        foreach ($this->chunkIds() as $chunkId) {
+            $task->reload();
+
+            if ($task->isCancelRequested()) {
+                return StepResult::cancelled(
+                    errorInfo: new ErrorInfo(499, $task->getCancelReason() ?? 'Cancellation requested.'),
+                    meta: ['chunkId' => $chunkId],
+                    message: $task->getCancelReason() ?? 'Cancellation requested.',
+                );
+            }
+
+            $this->processChunk($chunkId);
+
+            $task->getPayload(static::class)->lastProcessedChunkId = $chunkId;
+            $task->persistPayload();
+        }
+
+        return StepResult::succeeded(message: 'Import completed.');
+    }
+
+    /**
+     * @return iterable<int>
+     */
+    private function chunkIds(): iterable {
+        yield from [101, 102, 103];
+    }
+
+    private function processChunk(int $chunkId): void {
+        // Your long-running work for this chunk.
+    }
+}
+```
 
 ### File attachments in payloads
 

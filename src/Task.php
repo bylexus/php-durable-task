@@ -179,13 +179,13 @@ abstract class Task {
         return $this->payload !== null;
     }
 
-    public function setPayload(mixed $propertyOrPayload, mixed $payload = null): void {
+    public function setPayload(mixed $propertyOrPayload, mixed $payload = null): self {
         $argumentCount = func_num_args();
 
         if ($argumentCount === 1) {
             $this->payload = PayloadNormalizer::normalizeRoot($propertyOrPayload);
 
-            return;
+            return $this;
         }
 
         if ($argumentCount !== 2 || !is_string($propertyOrPayload)) {
@@ -197,6 +197,50 @@ abstract class Task {
         }
 
         $this->materializeRootPayload()->{$propertyOrPayload} = $payload;
+        return $this;
+    }
+
+    public function reload(): self {
+        $this->assertPersistedQueueBound(__METHOD__);
+
+        $record = $this->queue->get($this->id);
+        $this->hydrateFromQueueRecord($record, $this->actualStep, $this->queue->getAttachmentBlobStore(), $this->queue);
+        return $this;
+    }
+
+    public function persistPayload(): self {
+        $this->assertPersistedQueueBound(__METHOD__);
+
+        $connection = $this->queue->getConnection();
+        $startedTransaction = false;
+
+        if (!$connection->inTransaction()) {
+            $connection->beginTransaction();
+            $startedTransaction = true;
+        }
+
+        try {
+            $record = $this->queue->update(
+                $this->id,
+                ['payload_json' => $this->getStoredPayload()],
+                true,
+            );
+
+            if ($startedTransaction) {
+                $connection->commit();
+            }
+
+            $this->setStoredPayload($record->payload, $this->queue->getAttachmentBlobStore());
+        } catch (
+            \Throwable $throwable
+        ) {
+            if ($startedTransaction && $connection->inTransaction()) {
+                $connection->rollBack();
+            }
+
+            throw $throwable;
+        }
+        return $this;
     }
 
     public function enqueue(TaskEnvironment $taskEnvironment, int $priority = self::PRIO_NORMAL): QueueRecord {
@@ -377,6 +421,15 @@ abstract class Task {
         }
 
         return $this->payload;
+    }
+
+    private function assertPersistedQueueBound(string $operation): void {
+        if ($this->queue === null || $this->id === null) {
+            throw new ConfigurationException(sprintf(
+                '%s requires an enqueued task bound to a database queue.',
+                $operation,
+            ));
+        }
     }
 
     private function resolveCancellationCleanupAfter(): \DateInterval {
