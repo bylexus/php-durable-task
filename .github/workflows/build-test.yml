@@ -1,0 +1,67 @@
+name: Build Test
+
+on:
+    push:
+    pull_request:
+
+jobs:
+    test:
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Show Docker versions
+              run: |
+                  docker --version
+                  docker compose version
+
+            - name: Create CI environment files
+              run: |
+                  # Single CI-only env file for both compose interpolation and container runtime env.
+                  cat > .env.docker <<'EOF'
+                  POSTGRES_USER=postgres
+                  POSTGRES_PASSWORD=postgres
+                  POSTGRES_DB=tr_test
+                  PG_TEST_DATABASE_NAME=tr_test
+                  PG_TEST_DATABASE_DSN=pgsql:host=postgres;port=5432;dbname=tr_test
+                  PG_TEST_DATABASE_USER=postgres
+                  PG_TEST_DATABASE_PASSWORD=postgres
+
+                  MYSQL_ROOT_PASSWORD=phptr
+                  MYSQL_DATABASE=tr_test
+                  MYSQL_USER=phptr
+                  MYSQL_PASSWORD=phptr
+                  MYSQL_TEST_DATABASE_NAME=tr_test
+                  MYSQL_TEST_DATABASE_DSN=mysql:host=mysql;port=3306;dbname=tr_test
+                  MYSQL_TEST_DATABASE_USER=phptr
+                  MYSQL_TEST_DATABASE_PASSWORD=phptr
+
+                  MARIADB_ROOT_PASSWORD=phptr
+                  MARIADB_DATABASE=tr_test
+                  MARIADB_USER=phptr
+                  MARIADB_PASSWORD=phptr
+                  MARIADB_TEST_DATABASE_NAME=tr_test
+                  MARIADB_TEST_DATABASE_DSN=mysql:host=mariadb;port=3306;dbname=tr_test
+                  MARIADB_TEST_DATABASE_USER=phptr
+                  MARIADB_TEST_DATABASE_PASSWORD=phptr
+
+                  SQLITE_TEST_DATABASE_NAME=tr_test
+                  SQLITE_TEST_DATABASE_DSN=sqlite:tr_test.db
+                  SQLITE_TEST_DATABASE_USER=
+                  SQLITE_TEST_DATABASE_PASSWORD=
+                  EOF
+
+            - name: Start database services and wait for health checks
+              run: |
+                  docker compose --env-file .env.docker up -d --wait postgres mysql mariadb
+
+            - name: Install dependencies and run test suite in PHP container
+              run: |
+                  docker compose --env-file .env.docker run --rm php sh -lc "composer install --no-interaction --prefer-dist && composer test"
+
+            - name: Tear down services
+              if: always()
+              run: docker compose --env-file .env.docker down -v
