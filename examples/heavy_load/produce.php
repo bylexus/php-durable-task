@@ -1,21 +1,22 @@
 <?php
 
-use ByLexus\TaskRunner\Queue\QueueConfiguration;
-use ByLexus\TaskRunner\RunnerConfiguration;
+/**
+ * Example producer that creates 100 tasks that all loop 100 times - be careful!
+ * It causes the workers to do a lot of work
+ *
+ * Useful to test parallel workers and their behaviour
+ */
+
+use ByLexus\TaskRunner\Examples\heavy_load\CounterTask;
+use ByLexus\TaskRunner\Examples\Support\ExampleServiceContainer;
 use ByLexus\TaskRunner\TaskEnvironment;
 
 require_once __DIR__ . '/../../vendor/autoload.php';
-require_once __DIR__ . '/../ConsoleLogger.php';
-require_once __DIR__ . '/CounterTask.php';
-require_once __DIR__ . '/CounterStep.php';
 
-$conn = new PDO("pgsql:host=127.0.0.1;port=5432;dbname=tr_test", 'postgres', 'postgres');
-$qc = new QueueConfiguration(schemaName: 'phptr');
-$logger = new ConsoleLogger();
+$container = new ExampleServiceContainer();
 
-$runnerConfig = new RunnerConfiguration(bootstrapSchemaOnStart: true);
-$env = new TaskEnvironment($conn, $qc, logger: $logger, runnerConfiguration: $runnerConfig);
-$env->getSchemaManager()->bootstrap();
+// See ExampleServiceContainer::createTaskEnvironment for details how to create an environment:
+$env = $container->get(TaskEnvironment::class);
 
 $amount = 100;
 for ($i = 1; $i <= $amount; $i++) {

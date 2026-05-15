@@ -1,5 +1,9 @@
 <?php
 
+declare(strict_types=1);
+
+namespace ByLexus\TaskRunner\Examples\daily_cat_mail;
+
 use ByLexus\TaskRunner\Enum\StepStatus;
 use ByLexus\TaskRunner\FileAttachment;
 use ByLexus\TaskRunner\Result\ErrorInfo;
@@ -17,8 +21,11 @@ class GetDailyCatStep extends Step {
             $this->setCatFile($task, $file);
             $this->getLogger()->debug("Fetched random cat");
             return new StepResult(StepStatus::SUCCEEDED);
-        } catch (Throwable $t) {
-            return StepResult::failed(new ErrorInfo($t->getCode(), $t->getMessage()));
+        } catch (\Throwable $t) {
+            return StepResult::failed(
+                message: $t->getMessage(),
+                errorInfo: new ErrorInfo($t->getCode(), $t->getMessage())
+            );
         }
     }
 

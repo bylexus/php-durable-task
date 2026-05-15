@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+namespace ByLexus\TaskRunner\Examples\framework_integration;
+
 use ByLexus\TaskRunner\Attribute\MaxRuntime;
 use ByLexus\TaskRunner\Attribute\Retries;
 use ByLexus\TaskRunner\Attribute\RetryMode as RetryModeAttribute;
@@ -12,12 +14,10 @@ use ByLexus\TaskRunner\Step;
 use ByLexus\TaskRunner\Task;
 use Psr\Log\LoggerInterface;
 
-require_once __DIR__ . '/FrameworkDemoContainer.php';
-
 // Step-level attributes override task defaults for retry and runtime behaviour.
 #[Retries(5)]
 #[RetryModeAttribute(RetryMode::RESTART)]
-#[MaxRuntime(new DateInterval('PT30S'))]
+#[MaxRuntime(new \DateInterval('PT30S'))]
 final class FetchUserProfileStep extends Step {
     public function __construct(
         private ExampleUserApi $api,
@@ -36,7 +36,7 @@ final class FetchUserProfileStep extends Step {
             $task->getPayload(static::class)->profile = $profile;
 
             return StepResult::succeeded(message: 'Profile fetched from upstream service.');
-        } catch (Throwable $throwable) {
+        } catch (\Throwable $throwable) {
             // Returning a failed result keeps the failure structured in the queue row.
             return StepResult::failed(
                 new ErrorInfo((int) $throwable->getCode(), $throwable->getMessage()),

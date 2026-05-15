@@ -1,6 +1,9 @@
 <?php
 
+namespace ByLexus\TaskRunner\Examples\Support;
+
 use Psr\Log\AbstractLogger;
+use Stringable;
 
 class ConsoleLogger extends AbstractLogger {
     public function log($level, string|Stringable $message, array $context = []): void {

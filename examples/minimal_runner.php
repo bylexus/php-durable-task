@@ -1,27 +1,30 @@
 <?php
 
-use ByLexus\TaskRunner\Queue\QueueConfiguration;
+/**
+ * This is a minimal Queue runner that works on incoming jobs.
+ * Configure a database and set the following environment variables:
+ *
+ * - EXAMPLE_DATABASE_DSN: PDO DSN, e.g. "pgsql:host:127.0.0.1;port=5432;dbname=tr_test"
+ * - EXAMPLE_DATABASE_USER: the DB user, e.g. "postgres"
+ * - EXAMPLE_DATABASE_PASSWORD: the DB Password, e.g. "postgres"
+ */
+
+namespace ByLexus\TaskRunner\Examples;
+
+use ByLexus\TaskRunner\Examples\Support\ExampleServiceContainer;
 use ByLexus\TaskRunner\TaskEnvironment;
-use ByLexus\TaskRunner\RunnerConfiguration;
-use Psr\Log\LoggerInterface;
 
 require_once(__DIR__ . '/../vendor/autoload.php');
 
 $container = new ExampleServiceContainer();
-// PostgreSQL wakes runLoop() via LISTEN / NOTIFY. MySQL, MariaDB, and SQLite
-// use the same worker API but poll between claim attempts instead.
-// $conn = new PDO("pgsql:host=127.0.0.1;port=5432;dbname=tr_test", 'postgres', 'postgres');
-// $qc = new QueueConfiguration(schemaName: 'phptr');
-$conn = new PDO("mysql:host=127.0.0.1;port=3307;dbname=tr_test", 'phptr', 'phptr');
-$qc = new QueueConfiguration(schemaName: 'tr_test');
-// $qc = new QueueConfiguration();
-$runnerConfig = new RunnerConfiguration(
-    bootstrapSchemaOnStart: true,
-);
-$env = new TaskEnvironment($conn, $qc, $container, $container->get(LoggerInterface::class), $runnerConfig);
-// $conn = new PDO("sqlite:sqlite-test.db");
+
+// See ExampleServiceContainer::createTaskEnvironment for details how to create an environment:
+$env = $container->get(TaskEnvironment::class);
+
 $runner = $env->createRunner();
 
 // runLoop() benefits from notifications only on PostgreSQL; the other backends poll.
 $runner->runLoop();
+
+// if you just want a single run, then end:
 // $runner->runSingle();

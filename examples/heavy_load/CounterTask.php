@@ -2,11 +2,12 @@
 
 declare(strict_types=1);
 
+namespace ByLexus\TaskRunner\Examples\heavy_load;
+
 use ByLexus\TaskRunner\Attribute\CleanupAfter;
 use ByLexus\TaskRunner\Step;
 use ByLexus\TaskRunner\Task;
-
-require_once __DIR__ . '/CounterStep.php';
+use DateInterval;
 
 #[CleanupAfter(new DateInterval('PT2H'))]
 final class CounterTask extends Task {

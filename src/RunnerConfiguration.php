@@ -16,8 +16,7 @@ use Psr\Log\LoggerInterface;
  *
  * (c) Alexander Schenkel <info@alexi.ch>
  */
-final class RunnerConfiguration
-{
+final class RunnerConfiguration {
     private bool $bootstrapSchemaOnStart;
     private int $notificationWaitTimeoutSeconds;
     private string $runnerId;

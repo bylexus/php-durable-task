@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+namespace ByLexus\TaskRunner\Examples\framework_integration;
+
 use ByLexus\TaskRunner\Attribute\CleanupAfter;
 use ByLexus\TaskRunner\TaskEnvironment;
 use ByLexus\TaskRunner\Result\StepResult;
@@ -42,7 +44,7 @@ final class PrintGreetingStep extends Step {
     }
 }
 
-#[CleanupAfter(new DateInterval('PT10M'))]
+#[CleanupAfter(new \DateInterval('PT10M'))]
 final class GreetingTask extends Task {
     public function withName(string $name): self {
         // The root payload is just a stdClass, so examples can keep setup lightweight.
@@ -64,7 +66,7 @@ final class GreetingTask extends Task {
     }
 }
 
-$pdo = new PDO($dsn, $user, $password);
+$pdo = new \PDO($dsn, $user, $password);
 $env = new TaskEnvironment($pdo);
 // Quickstart performs an explicit schema bootstrap instead of relying on worker startup side effects.
 $env->getSchemaManager()->bootstrap();

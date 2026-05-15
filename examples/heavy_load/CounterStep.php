@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+namespace ByLexus\TaskRunner\Examples\heavy_load;
+
 use ByLexus\TaskRunner\Result\StepResult;
 use ByLexus\TaskRunner\Step;
 use ByLexus\TaskRunner\Task;

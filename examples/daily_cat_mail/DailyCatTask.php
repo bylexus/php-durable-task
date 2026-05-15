@@ -1,16 +1,17 @@
 <?php
 
+declare(strict_types=1);
+
+namespace ByLexus\TaskRunner\Examples\daily_cat_mail;
+
 use ByLexus\TaskRunner\Attribute\CleanupAfter;
+use ByLexus\TaskRunner\Examples\Support\SendMailStep;
 use ByLexus\TaskRunner\Step;
 use ByLexus\TaskRunner\Task;
 use PHPMailer\PHPMailer\PHPMailer;
 use Psr\Log\LoggerInterface;
 
-require_once(__DIR__ . '/GetDailyCatStep.php');
-require_once(__DIR__ . '/SendMailStep.php');
-require_once(__DIR__ . '/ResizeFileStep.php');
-
-#[CleanupAfter(successful: new DateInterval('PT4H'), unsuccessful: new DateInterval('PT1H'))]
+#[CleanupAfter(successful: new \DateInterval('PT4H'), unsuccessful: new \DateInterval('PT1H'))]
 class DailyCatTask extends Task {
     public function __construct(protected PHPMailer $mailer, ?LoggerInterface $logger = null) {
         parent::__construct(logger: $logger);

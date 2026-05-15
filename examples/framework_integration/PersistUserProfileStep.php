@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
+namespace ByLexus\TaskRunner\Examples\framework_integration;
+
 use ByLexus\TaskRunner\Result\ErrorInfo;
 use ByLexus\TaskRunner\Result\StepResult;
 use ByLexus\TaskRunner\Step;
 use ByLexus\TaskRunner\Task;
 use Psr\Log\LoggerInterface;
-
-require_once __DIR__ . '/FetchUserProfileStep.php';
 
 final class PersistUserProfileStep extends Step {
     public function __construct(
@@ -25,7 +25,7 @@ final class PersistUserProfileStep extends Step {
             $this->repository->save($profile);
 
             return StepResult::succeeded(message: 'Profile persisted to repository.');
-        } catch (Throwable $throwable) {
+        } catch (\Throwable $throwable) {
             return StepResult::failed(
                 new ErrorInfo((int) $throwable->getCode(), $throwable->getMessage()),
                 message: $throwable->getMessage(),

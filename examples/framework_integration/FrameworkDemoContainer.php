@@ -2,10 +2,11 @@
 
 declare(strict_types=1);
 
+namespace ByLexus\TaskRunner\Examples\framework_integration;
+
+use ByLexus\TaskRunner\Examples\Support\ConsoleLogger;
 use Psr\Container\ContainerInterface;
 use Psr\Log\LoggerInterface;
-
-require_once __DIR__ . '/ConsoleLogger.php';
 
 // This stands in for an application service that talks to an external system.
 final class ExampleUserApi {
@@ -14,14 +15,14 @@ final class ExampleUserApi {
      */
     public function fetchById(int $userId): array {
         if ($userId <= 0) {
-            throw new InvalidArgumentException('User id must be greater than zero.');
+            throw new \InvalidArgumentException('User id must be greater than zero.');
         }
 
         return [
             'id' => $userId,
             'email' => sprintf('user-%d@example.com', $userId),
             'plan' => $userId % 2 === 0 ? 'pro' : 'free',
-            'fetchedAt' => (new DateTimeImmutable('now', new DateTimeZone('UTC')))->format(DATE_ATOM),
+            'fetchedAt' => (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format(DATE_ATOM),
         ];
     }
 }
@@ -75,7 +76,7 @@ final class FrameworkDemoContainer implements ContainerInterface {
     public function get(string $id) {
         // A real application would likely delegate to its framework container here.
         if (!$this->has($id)) {
-            throw new InvalidArgumentException(sprintf('Unknown service: %s', $id));
+            throw new \InvalidArgumentException(sprintf('Unknown service: %s', $id));
         }
 
         return $this->services[$id];

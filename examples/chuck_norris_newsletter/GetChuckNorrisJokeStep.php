@@ -1,5 +1,7 @@
 <?php
 
+namespace ByLexus\TaskRunner\Examples\chuck_norris_newsletter;
+
 use ByLexus\TaskRunner\Enum\StepStatus;
 use ByLexus\TaskRunner\Result\ErrorInfo;
 use ByLexus\TaskRunner\Result\StepResult;
@@ -18,8 +20,8 @@ class GetChuckNorrisJokeStep extends Step {
             if (!empty($joke)) {
                 return new StepResult(StepStatus::SUCCEEDED);
             }
-            throw new Error('Cannot read Chuck Norris Joke', 500);
-        } catch (Throwable $t) {
+            throw new \Error('Cannot read Chuck Norris Joke', 500);
+        } catch (\Throwable $t) {
             return StepResult::failed(new ErrorInfo($t->getCode(), $t->getMessage()));
         }
     }

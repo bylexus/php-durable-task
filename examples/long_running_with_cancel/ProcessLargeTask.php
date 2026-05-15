@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
+namespace ByLexus\TaskRunner\Examples\long_running_with_cancel;
+
 use ByLexus\TaskRunner\Attribute\CleanupAfter;
 use ByLexus\TaskRunner\Step;
 use ByLexus\TaskRunner\Task;
 use Psr\Log\LoggerInterface;
 
-require_once __DIR__ . '/ProcessLargeImportStep.php';
-
-#[CleanupAfter(new DateInterval('PT2H'))]
+#[CleanupAfter(new \DateInterval('PT2H'))]
 final class ProcessLargeTask extends Task {
     public function __construct(
         ?LoggerInterface $logger = null,

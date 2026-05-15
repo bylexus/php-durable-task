@@ -1,29 +1,18 @@
 <?php
 
-use ByLexus\TaskRunner\Queue\QueueConfiguration;
-use ByLexus\TaskRunner\RunnerConfiguration;
+declare(strict_types=1);
+
+use ByLexus\TaskRunner\Examples\long_running_with_cancel\ProcessLargeTask;
+use ByLexus\TaskRunner\Examples\Support\ExampleServiceContainer;
 use ByLexus\TaskRunner\TaskEnvironment;
 
 require_once(__DIR__ . '/../../vendor/autoload.php');
-require_once(__DIR__ . '/ProcessLargeTask.php');
 
 
-// Postgres:
-$conn = new PDO("pgsql:host=127.0.0.1;port=5432;dbname=tr_test", 'postgres', 'postgres');
-$qc = new QueueConfiguration(schemaName: 'phptr');
+$container = new ExampleServiceContainer();
 
-// Mysql:
-// $conn = new PDO("mysql:host=127.0.0.1;port=3306;dbname=tr_test", 'phptr', 'phptr');
-// $qc = new QueueConfiguration(schemaName: 'tr_test');
-
-// sqlite:
-// $conn = new PDO("sqlite:sqlite-test.db");
-// $qc = new QueueConfiguration();
-$runnerConfig = new RunnerConfiguration(
-    bootstrapSchemaOnStart: true,
-);
-$env = new TaskEnvironment($conn, $qc, runnerConfiguration: $runnerConfig);
-$env->getSchemaManager()->bootstrap();
+// See ExampleServiceContainer::createTaskEnvironment for details how to create an environment:
+$env = $container->get(TaskEnvironment::class);
 
 $amountOfWork = 100;
 $wait = 10;

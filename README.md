@@ -531,12 +531,11 @@ The library supports PSR-11 constructor injection for both tasks and steps. This
 
 The framework-oriented example lives in:
 
-- [examples/framework_enqueue.php](examples/framework_enqueue.php)
-- [examples/framework_runner.php](examples/framework_runner.php)
-- [examples/FrameworkDemoContainer.php](examples/FrameworkDemoContainer.php)
-- [examples/ImportUserProfileTask.php](examples/ImportUserProfileTask.php)
-- [examples/FetchUserProfileStep.php](examples/FetchUserProfileStep.php)
-- [examples/PersistUserProfileStep.php](examples/PersistUserProfileStep.php)
+- [examples/framework_integration/framework_enqueue.php](examples/framework_integration/framework_enqueue.php)
+- [examples/framework_integration/FrameworkDemoContainer.php](examples/framework_integration/FrameworkDemoContainer.php)
+- [examples/framework_integration/ImportUserProfileTask.php](examples/framework_integration/ImportUserProfileTask.php)
+- [examples/framework_integration/FetchUserProfileStep.php](examples/framework_integration/FetchUserProfileStep.php)
+- [examples/framework_integration/PersistUserProfileStep.php](examples/framework_integration/PersistUserProfileStep.php)
 
 The integration contract is:
 
@@ -643,7 +642,7 @@ Logging is PSR-3 based.
 - Pass a logger into task or step constructors when you instantiate them yourself.
 - Hydrated tasks and steps receive the active runner logger automatically.
 
-The example container in [examples/ExampleServiceContainer.php](examples/ExampleServiceContainer.php) and [examples/FrameworkDemoContainer.php](examples/FrameworkDemoContainer.php) shows the intended shape.
+The example container in [examples/Support/ExampleServiceContainer.php](examples/Support/ExampleServiceContainer.php) shows the intended shape.
 
 ## Examples
 
@@ -655,11 +654,11 @@ Worker examples default to PostgreSQL DSNs. That gives `runLoop()` workers `LIST
 
 ### Multi-step workflow with real services
 
-- [examples/chuck_norris_newsletter.php](examples/chuck_norris_newsletter.php): enqueues a newsletter task.
-- [examples/minimal_runner.php](examples/minimal_runner.php): worker entry point for the example.
-- [examples/ChuckNorrisNewsletterTask.php](examples/ChuckNorrisNewsletterTask.php): task orchestration.
-- [examples/GetChuckNorrisJokeStep.php](examples/GetChuckNorrisJokeStep.php): remote fetch step.
-- [examples/SendMailStep.php](examples/SendMailStep.php): mail delivery step.
+- [examples/minimal_runner.php](examples/minimal_runner.php): worker for the examples.
+- [examples/chuck_norris_newsletter/produce_chuck_norris_newsletter.php](examples/chuck_norris_newsletter/produce_chuck_norris_newsletter.php): enqueues a newsletter task.
+- [examples/chuck_norris_newsletter/ChuckNorrisNewsletterTask.php](examples/chuck_norris_newsletter/ChuckNorrisNewsletterTask.php): task orchestration.
+- [examples/chuck_norris_newsletter/GetChuckNorrisJokeStep.php](examples/chuck_norris_newsletter/GetChuckNorrisJokeStep.php): remote fetch step.
+- [examples/Support/SendMailStep.php](examples/Support/SendMailStep.php): mail delivery step.
 
 This example shows:
 
@@ -670,9 +669,9 @@ This example shows:
 
 ### Framework-style producer and worker split
 
-- [examples/framework_enqueue.php](examples/framework_enqueue.php): producer-side enqueue command.
-- [examples/framework_runner.php](examples/framework_runner.php): worker entry point with container and logger.
-- [examples/FrameworkDemoContainer.php](examples/FrameworkDemoContainer.php): a minimal PSR-11 container plus app services.
+- [examples/minimal_runner.php](examples/minimal_runner.php): worker for the examples.
+- [examples/framework_integration/framework_enqueue.php](examples/framework_integration/framework_enqueue.php): producer-side enqueue command.
+- [examples/framework_integration/FrameworkDemoContainer.php](examples/framework_integration/FrameworkDemoContainer.php): a minimal PSR-11 container plus app services.
 
 This example shows:
 

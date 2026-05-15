@@ -11,9 +11,7 @@ use ByLexus\TaskRunner\Enum\RetryMode;
 use ByLexus\TaskRunner\Exception\ConfigurationException;
 use ByLexus\TaskRunner\Metadata\MetadataResolver;
 use ByLexus\TaskRunner\Queue\DatabaseQueue;
-use ByLexus\TaskRunner\Queue\QueueConfiguration;
 use ByLexus\TaskRunner\Queue\QueueRecord;
-use ByLexus\TaskRunner\Queue\SchemaManager;
 use ByLexus\TaskRunner\Queue\Db\DatabasePlatform;
 use ByLexus\TaskRunner\Queue\Db\DatabasePlatformResolver;
 use ByLexus\TaskRunner\Result\ErrorInfo;
@@ -39,7 +37,6 @@ class Runner {
 
     private TaskEnvironment $taskEnvironment;
     private \PDO $connection;
-    private QueueConfiguration $queueConfiguration;
     private RunnerConfiguration $runnerConfiguration;
     private MetadataResolver $metadataResolver;
     private DatabaseQueue $queue;
@@ -52,7 +49,6 @@ class Runner {
     public function __construct(TaskEnvironment $taskEnvironment) {
         $this->taskEnvironment = $taskEnvironment;
         $this->connection = $taskEnvironment->getConnection();
-        $this->queueConfiguration = $taskEnvironment->getQueueConfiguration();
         $this->runnerConfiguration = $taskEnvironment->getRunnerConfiguration();
         $this->metadataResolver = $taskEnvironment->getMetadataResolver();
         $this->logger = $this->runnerConfiguration->getLogger() ?? new NullLogger();
@@ -393,14 +389,23 @@ class Runner {
 
             $result = $step->execute($task);
 
-            $this->logger->debug('Runner completed step execution.', [
+            $isFailedStep = $result->getStatus() === StepStatus::FAILED;
+            $logLevel = $isFailedStep ? 'error' : 'debug';
+            $logContext = [
                 'runnerId' => $this->runnerConfiguration->getRunnerId(),
                 'taskId' => $task->getId(),
                 'taskClass' => $task::class,
                 'stepClass' => $step::class,
                 'stepAttempt' => $step->getStepAttempt(),
                 'stepStatus' => $result->getStatus()->value,
-            ]);
+            ];
+
+            if ($isFailedStep) {
+                $logContext['errorCode'] = $result->getErrorInfo()?->getCode();
+                $logContext['errorMessage'] = $result->getMessage() ?? $result->getErrorInfo()?->getMessage();
+            }
+
+            $this->logger->log($logLevel, 'Runner completed step execution.', $logContext);
 
             return $result;
         } catch (\Throwable $throwable) {
@@ -819,6 +824,7 @@ class Runner {
             'taskClass' => $record->taskClass,
             'stepClass' => $record->stepClass,
             'errorCode' => $result->getErrorInfo()?->getCode(),
+            'errorMessage' => $result->getMessage() ?? $result->getErrorInfo()?->getMessage(),
         ]);
 
         $changes['task_status'] = TaskStatus::FAILED;

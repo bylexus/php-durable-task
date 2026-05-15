@@ -2,18 +2,19 @@
 
 declare(strict_types=1);
 
+namespace ByLexus\TaskRunner\Examples\framework_integration;
+
 use ByLexus\TaskRunner\TaskEnvironment;
 use Psr\Log\LoggerInterface;
 
-require dirname(__DIR__) . '/vendor/autoload.php';
-require_once __DIR__ . '/ImportUserProfileTask.php';
+require dirname(__DIR__) . '/../vendor/autoload.php';
 
 // These environment variables let the example plug into an existing database without code changes.
 $dsn = getenv('PHP_TR_DSN') ?: 'pgsql:host=127.0.0.1;port=5432;dbname=php_tr_test';
 $user = getenv('PHP_TR_DB_USER') ?: 'postgres';
 $password = getenv('PHP_TR_DB_PASS') ?: 'postgres';
 
-$pdo = new PDO($dsn, $user, $password);
+$pdo = new \PDO($dsn, $user, $password);
 // This container represents the application services available at enqueue time.
 $container = new FrameworkDemoContainer();
 $logger = $container->get(LoggerInterface::class);

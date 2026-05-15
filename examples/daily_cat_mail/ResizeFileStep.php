@@ -1,5 +1,9 @@
 <?php
 
+declare(strict_types=1);
+
+namespace ByLexus\TaskRunner\Examples\daily_cat_mail;
+
 use ByLexus\TaskRunner\Enum\StepStatus;
 use ByLexus\TaskRunner\FileAttachment;
 use ByLexus\TaskRunner\Result\ErrorInfo;
@@ -13,10 +17,8 @@ class ResizeFileStep extends Step {
             $file = $this->file($task);
             $width = $this->width($task);
             if (!$file) {
-                throw new Exception('No file attached');
+                throw new \Exception('No file attached');
             }
-            // do some not really resizing thingajinx .....
-            // $file = FileAttachment::fromString("Haha, just a joke!", "joke.txt", 'text/plain');
             $this->getLogger()->debug("Resizing file " . $file->name() . "to {$width}");
             $imgdata = $file->contents();
             list($w, $h) = getimagesizefromstring($imgdata);
@@ -24,17 +26,20 @@ class ResizeFileStep extends Step {
             $newW = $width;
             $newH = $h / $scale;
             $orig = imagecreatefromstring($imgdata);
-            $resized = imagecreatetruecolor($newW, $newH);
-            imagecopyresampled($resized, $orig, 0, 0, 0, 0, $newW, $newH, $w, $h);
+            $resized = imagecreatetruecolor((int)$newW, (int)$newH);
+            imagecopyresampled($resized, $orig, 0, 0, 0, 0, (int)$newW, (int)$newH, (int)$w, (int)$h);
             $tmpfile = tempnam('/tmp', static::class);
             imagepng($resized, $tmpfile);
 
-            $this->setFile($task, FileAttachment::fromFile($tmpfile));
+            $this->setFile($task, FileAttachment::fromFile($tmpfile, $file->name()));
             $this->getLogger()->debug("Resizing done");
 
             return new StepResult(StepStatus::SUCCEEDED);
-        } catch (Throwable $t) {
-            return StepResult::failed(new ErrorInfo($t->getCode(), $t->getMessage()));
+        } catch (\Throwable $t) {
+            return StepResult::failed(
+                message: $t->getMessage(),
+                errorInfo: new ErrorInfo($t->getCode(), $t->getMessage())
+            );
         }
     }
 

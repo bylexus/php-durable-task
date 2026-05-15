@@ -1,5 +1,7 @@
 <?php
 
+namespace ByLexus\TaskRunner\Examples\Support;
+
 use ByLexus\TaskRunner\Enum\StepStatus;
 use ByLexus\TaskRunner\FileAttachment;
 use ByLexus\TaskRunner\Result\ErrorInfo;
@@ -36,7 +38,7 @@ class SendMailStep extends Step {
                     $a->toFile($path);
                     $this->getLogger()->debug("File is present: " . is_file($path));
                     $this->getLogger()->debug("File size: " . filesize($path));
-                    $this->mailer->addAttachment($path, name: $a->name(), type:$a->mimeType());
+                    $this->mailer->addAttachment($path, name: basename($a->name()), type:$a->mimeType());
                 }
             }
             $this->mailer->send();
@@ -45,8 +47,11 @@ class SendMailStep extends Step {
             }
             $this->getLogger()->debug("Sending an email - DONE!");
             return new StepResult(StepStatus::SUCCEEDED);
-        } catch (Throwable $t) {
-            return StepResult::failed(new ErrorInfo($t->getCode(), $t->getMessage()));
+        } catch (\Throwable $t) {
+            return StepResult::failed(
+                message: $t->getMessage(),
+                errorInfo: new ErrorInfo($t->getCode(), $t->getMessage())
+            );
         }
     }
 

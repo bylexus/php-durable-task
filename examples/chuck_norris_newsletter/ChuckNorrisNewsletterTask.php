@@ -1,13 +1,14 @@
 <?php
 
+namespace ByLexus\TaskRunner\Examples\chuck_norris_newsletter;
+
 use ByLexus\TaskRunner\Attribute\CleanupAfter;
+use ByLexus\TaskRunner\Examples\Support\SendMailStep;
 use ByLexus\TaskRunner\Step;
 use ByLexus\TaskRunner\Task;
+use DateInterval;
 use PHPMailer\PHPMailer\PHPMailer;
 use Psr\Log\LoggerInterface;
-
-require_once(__DIR__ . '/GetChuckNorrisJokeStep.php');
-require_once(__DIR__ . '/SendMailStep.php');
 
 #[CleanupAfter(successful: new DateInterval('PT0H'), unsuccessful: new DateInterval('PT1H'))]
 class ChuckNorrisNewsletterTask extends Task {

@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+namespace ByLexus\TaskRunner\Examples\long_running_with_cancel;
+
 use ByLexus\TaskRunner\Result\ErrorInfo;
 use ByLexus\TaskRunner\Result\StepResult;
 use ByLexus\TaskRunner\Step;

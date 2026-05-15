@@ -34,7 +34,7 @@ final class FileAttachment {
     ) {
     }
 
-    public static function fromFile(string $path): self {
+    public static function fromFile(string $path, ?string $name = null): self {
         if ($path === '') {
             throw new ConfigurationException('Attachment path must not be empty.');
         }
@@ -56,7 +56,7 @@ final class FileAttachment {
         $mimeType = mime_content_type($path);
 
         return new self(
-            basename($path),
+            $name ?: basename($path),
             $mimeType === false ? null : $mimeType,
             strlen($content),
             hash('sha256', $content),

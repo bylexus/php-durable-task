@@ -10,9 +10,11 @@
         "psr/log": "^3.0"
     },
     "require-dev": {
-        "phpmailer/phpmailer": "^7.0",
         "phpunit/phpunit": "^12.5",
         "squizlabs/php_codesniffer": "^3"
+    },
+    "suggest": {
+        "phpmailer/phpmailer": "If you want to run the examples with a mail component, install PHPMailer"
     },
     "autoload": {
         "psr-4": {
@@ -22,9 +24,7 @@
     "autoload-dev": {
         "psr-4": {
             "ByLexus\\TaskRunner\\Tests\\": "tests/",
-            "": [
-                "examples/"
-            ]
+            "ByLexus\\TaskRunner\\Examples\\": "examples/"
         }
     },
     "scripts": {
