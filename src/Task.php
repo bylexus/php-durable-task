@@ -27,7 +27,7 @@ use Psr\Log\LoggerInterface;
  *
  * (c) Alexander Schenkel <info@alexi.ch>
  */
-abstract class Task {
+abstract class Task implements DisplayName {
     public const PRIO_VERY_HIGH = 1;
     public const PRIO_HIGH = 2;
     public const PRIO_NORMAL = 3;
@@ -35,7 +35,6 @@ abstract class Task {
     public const PRIO_VERY_LOW = 5;
 
     private mixed $payload = null;
-    private ?LoggerInterface $baseLogger = null;
     private ?LoggerInterface $logger = null;
 
     private ?int $id = null;
@@ -74,6 +73,11 @@ abstract class Task {
         $this->logger?->debug('Task created.', [
             'taskClass' => static::class,
         ]);
+    }
+
+    #[\Override]
+    public function displayName(): string {
+        return static::class;
     }
 
     public function getId(): ?int {
@@ -212,7 +216,6 @@ abstract class Task {
     }
 
     public function setLogger(LoggerInterface $logger): void {
-        $this->baseLogger = $logger;
         $this->logger = new ContextualLogger($logger, function (): array {
             return [
                 'taskId' => $this->id,

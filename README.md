@@ -633,7 +633,7 @@ You can configure specific behaviour of your Tasks / Steps by setting PHP Attrib
 | --- | --- | --- | --- |
 | `#[CleanupAfter(...)]` | task | `successful: PT0S`, `unsuccessful: P7D` | How long terminal rows stay in the queue table before cleanup removes them. Successful tasks and unsuccessful tasks are configured separately. |
 | `#[Retries(...)]` | step | `count: 3`, `delay: PT1M` | Maximum retry count and minimum delay before retrying a failed step. |
-| `#[RetryMode(...)]` | step | `fail` | `restart` requeues the same failed step while the other modes end in a terminal failure. |
+| `#[RetryMode(...)]` | step | `fail` | `restart` requeues the same failed step while the other modes end in a terminal failure. The mode `skip` can only be used in Steps: if the step fails, it just skips it, without failing the task, so the next step is taken. |
 | `#[MaxRuntime(...)]` | task, step | `PT1H` | Maximum allowed runtime for one step attempt. This is a best-effort deadline: the runner marks overdue steps as failed before or after execution, and cleanup ticks can also fail stale running claims. It does not interrupt PHP while a step is executing; the running process keeps running until the step returns or throws. |
 
 Example:
