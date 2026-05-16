@@ -151,63 +151,7 @@ SQL,
         }
 
         try {
-            if ($this->platform->supportsInsertReturning()) {
-                $insertSql = <<<'SQL'
-INSERT INTO %s (
-    task_class,
-    step_class,
-    task_status,
-    priority,
-    task_created_at,
-    task_started_at,
-    task_finished_at,
-    cleanup_at,
-    step_status,
-    step_attempt,
-    step_started_at,
-    step_finished_at,
-    payload_json,
-    result_json,
-    error_json,
-    available_at,
-    claimed_at,
-    claimed_by,
-    last_error_code,
-    last_error_message,
-    cancel_requested,
-    cancel_reason,
-    updated_at
-)
-VALUES (
-    :task_class,
-    :step_class,
-    :task_status,
-    :priority,
-    :task_created_at,
-    :task_started_at,
-    :task_finished_at,
-    :cleanup_at,
-    :step_status,
-    :step_attempt,
-    :step_started_at,
-    :step_finished_at,
-    NULL,
-    :result_json,
-    :error_json,
-    :available_at,
-    :claimed_at,
-    :claimed_by,
-    :last_error_code,
-    :last_error_message,
-    FALSE,
-    :cancel_reason,
-    :updated_at
-)
-RETURNING *
-SQL
-                ;
-            } else {
-                $insertSql = <<<'SQL'
+            $insertSql = <<<'SQL'
 INSERT INTO %s (
     task_class,
     step_class,
@@ -259,6 +203,9 @@ VALUES (
     :updated_at
 )
 SQL;
+
+            if ($this->platform->supportsInsertReturning()) {
+                $insertSql .= "\nRETURNING *";
             }
 
             $statement = $this->connection->prepare(
@@ -375,31 +322,20 @@ SQL;
 
             $record = QueueRecord::fromDatabaseRow($row);
             $now = $this->currentTimestamp();
+            $claimUpdateSql = <<<'SQL'
+UPDATE %s
+SET task_status = :task_status,
+    step_status = :step_status,
+    claimed_at = :claimed_at,
+    claimed_by = :claimed_by,
+    task_started_at = COALESCE(task_started_at, :task_started_at),
+    step_started_at = COALESCE(step_started_at, :step_started_at),
+    updated_at = :updated_at
+WHERE task_id = :task_id
+SQL;
+
             if ($this->platform->supportsUpdateReturning()) {
-                $claimUpdateSql = <<<'SQL'
-UPDATE %s
-SET task_status = :task_status,
-    step_status = :step_status,
-    claimed_at = :claimed_at,
-    claimed_by = :claimed_by,
-    task_started_at = COALESCE(task_started_at, :task_started_at),
-    step_started_at = COALESCE(step_started_at, :step_started_at),
-    updated_at = :updated_at
-WHERE task_id = :task_id
-RETURNING *
-SQL;
-            } else {
-                $claimUpdateSql = <<<'SQL'
-UPDATE %s
-SET task_status = :task_status,
-    step_status = :step_status,
-    claimed_at = :claimed_at,
-    claimed_by = :claimed_by,
-    task_started_at = COALESCE(task_started_at, :task_started_at),
-    step_started_at = COALESCE(step_started_at, :step_started_at),
-    updated_at = :updated_at
-WHERE task_id = :task_id
-SQL;
+                $claimUpdateSql .= "\nRETURNING *";
             }
 
             $update = $this->connection->prepare(

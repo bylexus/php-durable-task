@@ -43,16 +43,15 @@ final class AttachmentBlobStore {
     }
 
     public function store(int $taskId, string $content, int $sizeBytes, string $sha256): int {
+        $insertSql = 'INSERT INTO %s (task_id, content, size_bytes, sha256, created_at)
+                 VALUES (:task_id, :content, :size_bytes, :sha256, :created_at)';
+
+        if ($this->platform->supportsInsertReturning()) {
+            $insertSql .= "\n                 RETURNING blob_id";
+        }
+
         $statement = $this->connection->prepare(
-            sprintf(
-                $this->platform->supportsInsertReturning()
-                    ? 'INSERT INTO %s (task_id, content, size_bytes, sha256, created_at)
-                 VALUES (:task_id, :content, :size_bytes, :sha256, :created_at)
-                 RETURNING blob_id'
-                    : 'INSERT INTO %s (task_id, content, size_bytes, sha256, created_at)
-                 VALUES (:task_id, :content, :size_bytes, :sha256, :created_at)',
-                $this->quotedBlobTableName(),
-            ),
+            sprintf($insertSql, $this->quotedBlobTableName()),
         );
         $statement->bindValue('task_id', $taskId, PDO::PARAM_INT);
         $statement->bindValue('content', $content, PDO::PARAM_LOB);
