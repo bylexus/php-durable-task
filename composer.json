@@ -1,6 +1,6 @@
 {
     "name": "bylexus/php-tr",
-    "description": "Queued Task worker library for PHP backed by PostgreSQL.",
+    "description": "Queued Task worker library for PHP backed by a relational database",
     "type": "library",
     "license": "MIT",
     "require": {

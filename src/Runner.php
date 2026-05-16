@@ -740,55 +740,114 @@ class Runner {
         ];
 
         $isRetriableMode = $retryMode === RetryMode::RESTART || $retryMode === RetryMode::SKIP;
+        $status = $result->getStatus();
 
-        if (
-            $result->getStatus() === StepStatus::FAILED
-            && $isRetriableMode
-            && $record->stepAttempt < $retries
-        ) {
-            $this->logger->warning('Runner requeued failed step for retry.', [
+        // Precedence: retry > next step > terminal
+        if ($status === StepStatus::FAILED && $isRetriableMode && $record->stepAttempt < $retries) {
+            return $this->applyRetryChanges($changes, $record, $retryMode, $retryDelay, $now);
+        }
+
+        $skipToNext = $status === StepStatus::FAILED && $retryMode === RetryMode::SKIP && $nextStep !== null;
+        $succeedToNext = $status === StepStatus::SUCCEEDED && $nextStep !== null;
+
+        if ($skipToNext || $succeedToNext) {
+            /** @var Step $nextStep */
+            return $this->applyNextStepChanges($changes, $record, $nextStep, $now, $skipToNext);
+        }
+
+        return $this->applyTerminalChanges($changes, $record, $result, $taskMetadata, $retryMode, $now);
+    }
+
+    /**
+     * @param array<string, mixed> $changes
+     *
+     * @return array<string, mixed>
+     */
+    private function applyRetryChanges(
+        array $changes,
+        QueueRecord $record,
+        RetryMode $retryMode,
+        \DateInterval $retryDelay,
+        \DateTimeImmutable $now,
+    ): array {
+        $this->logger->warning('Runner requeued failed step for retry.', [
+            'runnerId' => $this->runnerConfiguration->getRunnerId(),
+            'taskId' => $record->taskId,
+            'taskClass' => $record->taskClass,
+            'stepClass' => $record->stepClass,
+            'stepAttempt' => $record->stepAttempt + 1,
+            'retryMode' => $retryMode->value,
+        ]);
+
+        $changes['task_status'] = TaskStatus::QUEUED;
+        $changes['step_status'] = StepStatus::QUEUED;
+        $changes['step_attempt'] = $record->stepAttempt + 1;
+        $changes['step_started_at'] = null;
+        $changes['step_finished_at'] = null;
+        $changes['available_at'] = $now->add($retryDelay);
+
+        return $changes;
+    }
+
+    /**
+     * @param array<string, mixed> $changes
+     *
+     * @return array<string, mixed>
+     */
+    private function applyNextStepChanges(
+        array $changes,
+        QueueRecord $record,
+        Step $nextStep,
+        \DateTimeImmutable $now,
+        bool $skippedPreviousStep,
+    ): array {
+        if ($skippedPreviousStep) {
+            $this->logger->warning('Runner skipped failed step and queued next step.', [
                 'runnerId' => $this->runnerConfiguration->getRunnerId(),
                 'taskId' => $record->taskId,
                 'taskClass' => $record->taskClass,
                 'stepClass' => $record->stepClass,
-                'stepAttempt' => $record->stepAttempt + 1,
-                'retryMode' => $retryMode->value,
+                'nextStepClass' => $nextStep::class,
             ]);
-
-            $changes['task_status'] = TaskStatus::QUEUED;
-            $changes['step_status'] = StepStatus::QUEUED;
-            $changes['step_attempt'] = $record->stepAttempt + 1;
-            $changes['step_started_at'] = null;
-            $changes['step_finished_at'] = null;
-            $changes['available_at'] = $now->add($retryDelay);
-
-            return $changes;
+        } else {
+            $this->logger->info('Runner queued next step.', [
+                'runnerId' => $this->runnerConfiguration->getRunnerId(),
+                'taskId' => $record->taskId,
+                'taskClass' => $record->taskClass,
+                'stepClass' => $nextStep::class,
+            ]);
         }
 
-        if (
-            $result->getStatus() === StepStatus::FAILED
-            && $retryMode === RetryMode::SKIP
-        ) {
-            if ($nextStep !== null) {
-                $this->logger->warning('Runner skipped failed step and queued next step.', [
-                    'runnerId' => $this->runnerConfiguration->getRunnerId(),
-                    'taskId' => $record->taskId,
-                    'taskClass' => $record->taskClass,
-                    'stepClass' => $record->stepClass,
-                    'nextStepClass' => $nextStep::class,
-                ]);
+        $changes['task_status'] = TaskStatus::QUEUED;
+        $changes['step_class'] = $nextStep::class;
+        $changes['step_status'] = StepStatus::QUEUED;
+        $changes['step_attempt'] = 0;
+        $changes['step_started_at'] = null;
+        $changes['step_finished_at'] = null;
+        $changes['available_at'] = $now;
 
-                $changes['task_status'] = TaskStatus::QUEUED;
-                $changes['step_class'] = $nextStep::class;
-                $changes['step_status'] = StepStatus::QUEUED;
-                $changes['step_attempt'] = 0;
-                $changes['step_started_at'] = null;
-                $changes['step_finished_at'] = null;
-                $changes['available_at'] = $now;
+        return $changes;
+    }
 
-                return $changes;
-            }
+    /**
+     * @param array<string, mixed> $changes
+     *
+     * @return array<string, mixed>
+     */
+    private function applyTerminalChanges(
+        array $changes,
+        QueueRecord $record,
+        StepResult $result,
+        \ByLexus\TaskRunner\Metadata\TaskMetadata $taskMetadata,
+        RetryMode $retryMode,
+        \DateTimeImmutable $now,
+    ): array {
+        $status = $result->getStatus();
+        $changes['task_finished_at'] = $now;
+        $changes['step_finished_at'] = $now;
 
+        // SKIP on a failed final step: task succeeds, step is recorded as SKIPPED.
+        if ($status === StepStatus::FAILED && $retryMode === RetryMode::SKIP) {
             $this->logger->warning('Runner skipped failed final step and marked task as succeeded.', [
                 'runnerId' => $this->runnerConfiguration->getRunnerId(),
                 'taskId' => $record->taskId,
@@ -796,8 +855,6 @@ class Runner {
                 'stepClass' => $record->stepClass,
             ]);
 
-            $changes['task_finished_at'] = $now;
-            $changes['step_finished_at'] = $now;
             $changes['cleanup_at'] = $now->add(
                 $this->resolveCleanupAfterIntervalForStatus($taskMetadata, StepStatus::SUCCEEDED),
             );
@@ -807,32 +864,11 @@ class Runner {
             return $changes;
         }
 
-        if ($result->getStatus() === StepStatus::SUCCEEDED && $nextStep !== null) {
-            $this->logger->info('Runner queued next step.', [
-                'runnerId' => $this->runnerConfiguration->getRunnerId(),
-                'taskId' => $record->taskId,
-                'taskClass' => $record->taskClass,
-                'stepClass' => $nextStep::class,
-            ]);
-
-            $changes['task_status'] = TaskStatus::QUEUED;
-            $changes['step_class'] = $nextStep::class;
-            $changes['step_status'] = StepStatus::QUEUED;
-            $changes['step_attempt'] = 0;
-            $changes['step_started_at'] = null;
-            $changes['step_finished_at'] = null;
-            $changes['available_at'] = $now;
-
-            return $changes;
-        }
-
-        $changes['task_finished_at'] = $now;
-        $changes['step_finished_at'] = $now;
         $changes['cleanup_at'] = $now->add(
-            $this->resolveCleanupAfterIntervalForStatus($taskMetadata, $result->getStatus()),
+            $this->resolveCleanupAfterIntervalForStatus($taskMetadata, $status),
         );
 
-        if ($result->getStatus() === StepStatus::SUCCEEDED) {
+        if ($status === StepStatus::SUCCEEDED) {
             $this->logger->info('Runner marked task as succeeded.', [
                 'runnerId' => $this->runnerConfiguration->getRunnerId(),
                 'taskId' => $record->taskId,
@@ -846,7 +882,7 @@ class Runner {
             return $changes;
         }
 
-        if ($result->getStatus() === StepStatus::CANCELLED) {
+        if ($status === StepStatus::CANCELLED) {
             $this->logger->warning('Runner marked task as cancelled.', [
                 'runnerId' => $this->runnerConfiguration->getRunnerId(),
                 'taskId' => $record->taskId,

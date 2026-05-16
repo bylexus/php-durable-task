@@ -7,7 +7,7 @@ namespace ByLexus\TaskRunner\Queue;
 /**
  * Configures the queue table.
  *
- * Defines the PostgreSQL table name and related settings used by the task queue.
+ * Defines the queue table name and related settings used by the task queue.
  *
  * This file is part of bylexus/php-tr
  *

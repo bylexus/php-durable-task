@@ -17,8 +17,7 @@ use Stringable;
  *
  * (c) Alexander Schenkel <info@alexi.ch>
  */
-final class ContextualLogger extends AbstractLogger
-{
+final class ContextualLogger extends AbstractLogger {
     /** @var \Closure(): array<string, mixed> */
     private \Closure $contextProvider;
 
@@ -35,6 +34,7 @@ final class ContextualLogger extends AbstractLogger
     /**
      * @param array<string, mixed> $context
      */
+    #[\Override]
     public function log($level, string|Stringable $message, array $context = []): void {
         $this->logger->log($level, $message, array_merge(($this->contextProvider)(), $context));
     }

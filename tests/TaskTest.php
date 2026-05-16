@@ -28,10 +28,6 @@ use Psr\Log\NullLogger;
 
 final class TaskTest extends TestCase
 {
-    public function testTaskProvidesPayloadClassContext(): void {
-        self::assertSame(QueueWorkflowTaskFixture::class, QueueWorkflowTaskFixture::getPayloadClassContext());
-    }
-
     public function testTaskCanAcceptLoggerInConstructor(): void {
         $logger = new SpyLogger();
 

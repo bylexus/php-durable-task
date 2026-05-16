@@ -40,9 +40,9 @@ final class MetadataResolver {
     private array $stepAttributeCache = [];
 
     public function __construct() {
-        $this->defaultRetryMode = new RetryModeAttribute(RetryModeAttribute::DEFAULT_MODE);
+        $this->defaultRetryMode = RetryModeAttribute::createDefault();
         $this->defaultRetries = Retries::createDefault();
-        $this->defaultMaxRuntime = new MaxRuntime(new \DateInterval(MaxRuntime::DEFAULT_SPEC));
+        $this->defaultMaxRuntime = MaxRuntime::createDefault();
         $this->defaultCleanupAfter = CleanupAfter::createDefault();
     }
 

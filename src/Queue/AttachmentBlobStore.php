@@ -13,7 +13,7 @@ use ByLexus\TaskRunner\Exception\SerializationException;
 use PDO;
 
 /**
- * Stores attachment binary data in PostgreSQL.
+ * Stores attachment binary data in the queue.
  *
  * Persists and restores the raw bytes referenced by FileAttachment payload metadata.
  *

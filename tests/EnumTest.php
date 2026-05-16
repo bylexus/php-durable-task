@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace ByLexus\TaskRunner\Tests;
 
 use ByLexus\TaskRunner\Enum\RetryMode;
-use ByLexus\TaskRunner\Enum\RunnerMode;
 use ByLexus\TaskRunner\Enum\StepStatus;
 use ByLexus\TaskRunner\Enum\TaskStatus;
 use PHPUnit\Framework\TestCase;
@@ -14,10 +13,6 @@ final class EnumTest extends TestCase
 {
     public function testRetryModeCasesMatchPlan(): void {
         self::assertSame(['fail', 'restart', 'skip'], array_column(RetryMode::cases(), 'value'));
-    }
-
-    public function testRunnerModeCasesMatchPlan(): void {
-        self::assertSame(['single', 'loop'], array_column(RunnerMode::cases(), 'value'));
     }
 
     public function testTaskStatusCasesMatchPlan(): void {

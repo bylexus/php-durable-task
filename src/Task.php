@@ -228,10 +228,6 @@ abstract class Task implements DisplayName {
         return $this->logger;
     }
 
-    public static function getPayloadClassContext(): string {
-        return static::class;
-    }
-
     public function getPayload(?string $property = null): mixed {
         $rootPayload = $this->materializeRootPayload();
 

@@ -153,12 +153,6 @@ final class FileAttachment {
         $this->blobStore = $blobStore;
     }
 
-    public function markStored(int $blobId, AttachmentBlobStore $blobStore): void {
-        $this->blobId = $blobId;
-        $this->blobStore = $blobStore;
-        $this->content = null;
-    }
-
     public function toEnvelope(): \stdClass {
         if ($this->blobId === null) {
             throw new ConfigurationException(
