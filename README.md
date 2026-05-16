@@ -8,15 +8,15 @@ PHP Task Runner is a database-backed workflow library for PHP >= 8.3. It is mean
 
 It is not a standalone queue/runner, but meant to be integrated in your / a existing framework. So this library needs to be integrated in your environment.
 
-You model work as a `Task` that defines a workflow consisting of `Step`s. Enqueued Tasks then get worked on step-by-step by a Runner. The library stores the Tasks and Steps state in the database so multiple runner processes can safely compete for queued work.
+You model work as a `Task` that defines a workflow consisting of `Step`s. The Task defines the order of the Steps to be processed. Enqueued Tasks then get worked on step-by-step by a Runner. The library stores the Task state in the database so multiple runner processes can safely compete for queued work.
 
 The public surface is intentionally small and framework agnostic:
 
-- `Task` defines the workflow, consisting of Steps and owns the payload needed to process the steps.
-- `Step` executes one unit of work and returns a `StepResult`.
-- `Runner` claims queued Tasks/Steps, executes them, and persists the next state.
+- `Task` defines the workflow, owns the payload, and carries all queue state (status, step class, retry attempt, timestamps, ...).
+- `Step` is an interface implemented by classes that contain the actual work in their `execute()` method. Step instances are stateless — every piece of persisted state lives on the Task.
+- `Runner` claims queued Tasks, instantiates the configured Step, executes it, and persists the next state.
 
-`Task` and `Step` classes are kept separately, with the goal that single-purpose `Step` classes can be mixed and matched by several `Task` classes. For example, a generic `SendMail` step can be used by many tasks to send information emails.
+`Task` and `Step` classes are usually kept separately so that single-purpose `Step` classes can be mixed and matched by several `Task` classes. For example, a generic `SendMail` step can be used by many tasks to send information emails. For trivial single-step tasks, a single class can implement both `Task` and `Step`.
 
 This README is written for experienced PHP developers who want to integrate the library into an existing application or framework.
 
@@ -82,37 +82,39 @@ $ddl = $env->getSchemaManager()->exportDdl();
 
 ### Create a Step class
 
-First you define one (or multiple) single-purpose Step classes. Steps are one piece of work that can be used in a / multiple Task. Here, we create a simple Step that just prints a message:
+First you define one (or multiple) single-purpose Step classes. Steps are one piece of work that can be used in a / multiple Task. A Step class implements the `Step` interface (a single `execute()` method). Here, we create a simple Step that just prints a message:
 
 ```php
 use ByLexus\TaskRunner\Step;
 use ByLexus\TaskRunner\Task;
 use ByLexus\TaskRunner\Result\StepResult;
 
-final class PrintGreetingStep extends Step {
+final class PrintGreetingStep implements Step {
     // Implement the execute function to execute the work:
     public function execute(Task $task): StepResult {
         // Steps read input from the task payload.
         // It is advisable to use a namespaced payload, as all steps of a task share
         // the same Payload object. Here, we use the class name as namespace:
-        $name = $this->name($task);
+        $name = self::recipient($task);
 
         // Do the work!
-        fwrite(STDOUT, sprintf("Hello %s from a step.\n", $name));
+        fwrite(STDOUT, sprintf("Hello %s from a step.\n", $recipient));
 
         // and return a result:
         return StepResult::succeeded(message: 'Greeting printed.');
     }
 
     // Helper functions to get/set values from the Task's payload:
-    public static function setName(Task $task, string $name) {
-        $task->getPayload(static::class)->name = $name;
+    public static function setName(Task $task, string $recipient) {
+        $task->getPayload(static::class)->recipient = $recipient;
     }
-    public static function name(Tast $task): string {
-        return $task->getPayload(static::class)->name ?? 'world';
+    public static function recipient(Task $task): string {
+        return $task->getPayload(static::class)->recipient ?? 'world';
     }
 }
 ```
+
+Step instances are stateless: all persistent workflow state (current step class, retry attempt, started/finished timestamps, payload, ...) lives on the Task. Inside `execute()`, read step lifecycle data via `$task->getStepAttempt()`, `$task->getStepStartedAt()`, etc.
 
 ### Create a Task class to define your workflow
 
@@ -126,14 +128,14 @@ use ByLexus\TaskRunner\Attribute\CleanupAfter;
 
 #[CleanupAfter(new DateInterval('PT10M'), new DateInterval('P7D'))]
 final class GreetingTask extends Task {
-    // withName is just a helper method to set up the correct payload:
-    public function withName(string $name): self {
+    // withRecipient is just a helper method to set up the correct payload:
+    public function withRecipient(string $recipient): self {
         // The root payload is just a stdClass, so examples can keep setup lightweight.
         $this->getPayload()->globalValue = 'some global value';
 
         // You need to know the exact payload path for providing data for later steps:
         // Here, we use the static function defined in the step PrintGreeting:
-        PrintGreetingStep::setName($this, $name);
+        PrintGreetingStep::setRecipient($this, $recipient);
 
         return $this;
     }
@@ -155,7 +157,7 @@ Now you're ready to dispatch the task:
 ```php
 
 // The task owns the payload. Here we seed it before enqueueing the first step.
-$task = (new GreetingTask())->withName('Ada Lovelace');
+$task = (new GreetingTask())->withRecipient('Ada Lovelace');
 $env->enqueue($task);
 
 // Optional: lower numbers are picked first by runners.
@@ -221,12 +223,40 @@ Important points:
 Every step implements `execute(Task $task): StepResult`.
 
 ```php
-abstract class Step {
-    abstract public function execute(Task $task): StepResult;
+interface Step {
+    public function execute(Task $task): StepResult;
 }
 ```
 
 Use a step for one unit of work. A step should be undependant of other steps / tasks: It receives its information from the Payload of the task (and can also modify it).
+
+Step classes are instantiated fresh on each run and carry no persisted state. If your step needs collaborators (mailer, HTTP client, logger, ...), declare them as constructor parameters: the runner resolves them through the configured PSR-11 container.
+
+### Single-class Task + Step
+
+For trivial workflows with exactly one step, a single class can implement both the `Task` abstract class and the `Step` interface. The runner detects when `task_class` equals `step_class` and reuses the same instance:
+
+```php
+use ByLexus\TaskRunner\Result\StepResult;
+use ByLexus\TaskRunner\Step;
+use ByLexus\TaskRunner\Task;
+
+final class SendReminderTask extends Task implements Step {
+    public function withEmail(string $email): self {
+        $this->getPayload()->email = $email;
+        return $this;
+    }
+
+    public function nextStep(?Step $actStep = null): ?Step {
+        return $actStep === null ? $this : null;
+    }
+
+    public function execute(Task $task): StepResult {
+        // send reminder to $task->getPayload()->email
+        return StepResult::succeeded();
+    }
+}
+```
 
 After the work is done (or failed), the step must return a `StepResult` indicating the state of the result.
 The result itself must not contain data for futher steps (that goes to the payload), but result information only.
@@ -281,7 +311,7 @@ use ByLexus\TaskRunner\Result\StepResult;
 use ByLexus\TaskRunner\Step;
 use ByLexus\TaskRunner\Task;
 
-final class SendWelcomeMailStep extends Step {
+final class SendWelcomeMailStep implements Step {
     public function execute(Task $task): StepResult {
         $payload = $task->getPayload();
 
@@ -331,7 +361,7 @@ use ByLexus\TaskRunner\Result\StepResult;
 use ByLexus\TaskRunner\Step;
 use ByLexus\TaskRunner\Task;
 
-final class ProcessLargeImportStep extends Step {
+final class ProcessLargeImportStep implements Step {
     public function execute(Task $task): StepResult {
         foreach ($this->chunkIds() as $chunkId) {
             $task->reload();
@@ -388,7 +418,7 @@ use ByLexus\TaskRunner\Result\StepResult;
 use ByLexus\TaskRunner\Step;
 use ByLexus\TaskRunner\Task;
 
-final class SendMailStep extends Step {
+final class SendMailStep implements Step {
     public function execute(Task $task): StepResult {
         $attachment = $task->getPayload()->mail->attachment;
         $targetPath = sys_get_temp_dir() . '/invoice.pdf';
@@ -627,7 +657,7 @@ final class ExportTask extends Task {
 #[Retries(5, new DateInterval('PT2M'))]
 #[RetryMode(RetryModeEnum::RESTART)]
 #[MaxRuntime(new DateInterval('PT30S'))]
-final class CallRemoteApiStep extends Step {
+final class CallRemoteApiStep implements Step {
     // this step retries up to 5 times with a 2 minute backoff
 }
 
@@ -641,8 +671,8 @@ Use a shorter or longer `DateInterval` when a failing dependency should only be 
 Logging is PSR-3 based.
 
 - Pass a logger into `RunnerConfiguration::logger` when you want runner and queue logs.
-- Pass a logger into task or step constructors when you instantiate them yourself.
-- Hydrated tasks and steps receive the active runner logger automatically.
+- Hydrated tasks receive the active runner logger automatically and expose it via `$task->getLogger()`.
+- Steps that need a logger declare a `LoggerInterface` constructor parameter. `ClassInstantiator` resolves it through the configured PSR-11 container, falling back to the runner logger when no container binding exists.
 
 The example container in [examples/Support/ExampleServiceContainer.php](examples/Support/ExampleServiceContainer.php) shows the intended shape.
 

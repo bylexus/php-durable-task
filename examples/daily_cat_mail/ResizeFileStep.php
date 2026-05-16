@@ -10,16 +10,24 @@ use ByLexus\TaskRunner\Result\ErrorInfo;
 use ByLexus\TaskRunner\Result\StepResult;
 use ByLexus\TaskRunner\Step;
 use ByLexus\TaskRunner\Task;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 
-class ResizeFileStep extends Step {
+class ResizeFileStep implements Step {
+    private LoggerInterface $logger;
+
+    public function __construct(?LoggerInterface $logger = null) {
+        $this->logger = $logger ?? new NullLogger();
+    }
+
     public function execute(Task $task): StepResult {
         try {
-            $file = $this->file($task);
-            $width = $this->width($task);
+            $file = self::file($task);
+            $width = self::width($task);
             if (!$file) {
                 throw new \Exception('No file attached');
             }
-            $this->getLogger()->debug("Resizing file " . $file->name() . "to {$width}");
+            $this->logger->debug("Resizing file " . $file->name() . "to {$width}");
             $imgdata = $file->contents();
             list($w, $h) = getimagesizefromstring($imgdata);
             $scale = $w / $width;
@@ -31,8 +39,8 @@ class ResizeFileStep extends Step {
             $tmpfile = tempnam('/tmp', static::class);
             imagepng($resized, $tmpfile);
 
-            $this->setFile($task, FileAttachment::fromFile($tmpfile, $file->name()));
-            $this->getLogger()->debug("Resizing done");
+            self::setFile($task, FileAttachment::fromFile($tmpfile, $file->name()));
+            $this->logger->debug("Resizing done");
 
             return new StepResult(StepStatus::SUCCEEDED);
         } catch (\Throwable $t) {

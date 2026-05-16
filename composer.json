@@ -4,8 +4,8 @@
     "type": "library",
     "license": "MIT",
     "require": {
-        "ext-pdo": "*",
         "php": "^8.3",
+        "ext-pdo": "*",
         "psr/container": "^2.0",
         "psr/log": "^3.0"
     },

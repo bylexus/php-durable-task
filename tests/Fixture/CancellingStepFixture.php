@@ -8,7 +8,7 @@ use ByLexus\TaskRunner\Result\StepResult;
 use ByLexus\TaskRunner\Step;
 use ByLexus\TaskRunner\Task;
 
-final class CancellingStepFixture extends Step
+final class CancellingStepFixture implements Step
 {
     public function execute(Task $task): StepResult {
         $task->getPayload()->cancelledDuringExecution = true;

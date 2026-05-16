@@ -8,7 +8,7 @@ use ByLexus\TaskRunner\Result\StepResult;
 use ByLexus\TaskRunner\Step;
 use ByLexus\TaskRunner\Task;
 
-final class ConstructorInjectedStepFixture extends Step
+final class ConstructorInjectedStepFixture implements Step
 {
     public function __construct(private ConstructorInjectedServiceFixture $service) {
     }

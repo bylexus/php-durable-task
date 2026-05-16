@@ -32,16 +32,13 @@ final class TaskTest extends TestCase
         self::assertSame(QueueWorkflowTaskFixture::class, QueueWorkflowTaskFixture::getPayloadClassContext());
     }
 
-    public function testTaskAndStepCanAcceptLoggerInConstructor(): void {
+    public function testTaskCanAcceptLoggerInConstructor(): void {
         $logger = new SpyLogger();
 
         $task = new QueueWorkflowTaskFixture($logger);
-        $step = new QueueWorkflowStepFixture($logger);
 
         self::assertNotNull($task->getLogger());
-        self::assertNotNull($step->getLogger());
         self::assertTrue($logger->hasRecord('debug', 'Task created.'));
-        self::assertTrue($logger->hasRecord('debug', 'Step created.'));
     }
 
     public function testCancelMarksDetachedTaskAsCancelledInMemory(): void {
@@ -83,7 +80,7 @@ final class TaskTest extends TestCase
         $task = $environment->getTask((int) $record->taskId);
 
         self::assertSame(TaskStatus::QUEUED, $task->getStatus());
-        self::assertSame(StepStatus::QUEUED, $task->actualStep()?->getStatus());
+        self::assertSame(StepStatus::QUEUED, $task->getStepStatus());
 
         $task->getPayload()->checkpoint = 'phase-1';
         $task->persistPayload();
@@ -92,7 +89,7 @@ final class TaskTest extends TestCase
 
         self::assertSame('phase-1', $reloaded->getPayload()->checkpoint);
         self::assertSame(TaskStatus::QUEUED, $reloaded->getStatus());
-        self::assertSame(StepStatus::QUEUED, $reloaded->actualStep()?->getStatus());
+        self::assertSame(StepStatus::QUEUED, $reloaded->getStepStatus());
     }
 
     public function testReloadFailsForDetachedTask(): void {
@@ -153,7 +150,7 @@ final class TaskTest extends TestCase
         self::assertInstanceOf(\stdClass::class, $task->getPayload());
         self::assertSame('bar', $task->getPayload()->foo);
         self::assertInstanceOf(QueueWorkflowStepFixture::class, $task->actualStep());
-        self::assertSame(2, $task->actualStep()?->getStepAttempt());
+        self::assertSame(2, $task->getStepAttempt());
     }
 
     public function testTaskExposesAllHydratedQueueColumnsViaGetters(): void {
@@ -223,7 +220,7 @@ final class TaskTest extends TestCase
         self::assertSame($updatedAt, $task->getUpdatedAt());
     }
 
-    public function testTaskReconstitutionPropagatesLoggerToTaskAndStep(): void {
+    public function testTaskReconstitutionPropagatesLoggerToTask(): void {
         $logger = new SpyLogger();
         $record = new QueueRecord(
             42,
@@ -254,17 +251,13 @@ final class TaskTest extends TestCase
         $task = Task::fromQueueRecord($record, null, $logger);
 
         self::assertNotNull($task->getLogger());
-        self::assertNotNull($task->actualStep()?->getLogger());
+        self::assertInstanceOf(QueueWorkflowStepFixture::class, $task->actualStep());
         self::assertTrue($logger->hasRecord('debug', 'Task hydrated from queue record.'));
-        self::assertTrue($logger->hasRecord('debug', 'Step hydrated from queue record.'));
 
         $taskRecord = $this->findLogRecord($logger, 'debug', 'Task hydrated from queue record.');
-        $stepRecord = $this->findLogRecord($logger, 'debug', 'Step hydrated from queue record.');
 
         self::assertSame(42, $taskRecord['context']['taskId'] ?? null);
         self::assertSame(QueueWorkflowStepFixture::class, $taskRecord['context']['stepClass'] ?? null);
-        self::assertSame(42, $stepRecord['context']['taskId'] ?? null);
-        self::assertSame(QueueWorkflowStepFixture::class, $stepRecord['context']['stepClass'] ?? null);
     }
 
     public function testTaskReconstitutionInjectsProvidedLoggerWhenConstructorRequestsIt(): void {

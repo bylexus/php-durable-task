@@ -330,10 +330,6 @@ abstract class Task {
         $taskMetadata = $resolver->resolveTaskMetadata(static::class);
         $resolver->resolveStepMetadata($firstStep::class, $taskMetadata);
 
-        if ($this->baseLogger !== null) {
-            $firstStep->setLogger($this->baseLogger);
-        }
-
         $this->logger?->info('Task enqueue requested.', [
             'taskClass' => static::class,
             'stepClass' => $firstStep::class,
@@ -342,7 +338,6 @@ abstract class Task {
         $queue = $taskEnvironment->getDatabaseQueue();
         $record = $queue->enqueue($this, $firstStep, $priority);
 
-        $firstStep->hydrateFromQueueRecord($record);
         $this->hydrateFromQueueRecord($record, $firstStep, $queue->getAttachmentBlobStore(), $queue);
 
         return $record;
@@ -356,7 +351,7 @@ abstract class Task {
             'taskClass' => static::class,
             'stepClass' => $step::class,
             'stepStatus' => $result->getStatus()->value,
-            'stepAttempt' => $step->getStepAttempt(),
+            'stepAttempt' => $this->stepAttempt,
         ]);
     }
 
@@ -373,10 +368,37 @@ abstract class Task {
             $task->setLogger($logger);
         }
 
-        $actualStep = Step::fromQueueRecord($record, $container, $logger);
+        $actualStep = self::instantiateStepForRecord($task, $record, $container, $logger);
         $task->hydrateFromQueueRecord($record, $actualStep, $attachmentBlobStore, $queue);
 
         return $task;
+    }
+
+    private static function instantiateStepForRecord(
+        self $task,
+        QueueRecord $record,
+        ?ContainerInterface $container,
+        ?LoggerInterface $logger,
+    ): ?Step {
+        if ($record->stepClass === null) {
+            return null;
+        }
+
+        if ($record->stepClass === $record->taskClass && $task instanceof Step) {
+            return $task;
+        }
+
+        $step = ClassInstantiator::instantiate($record->stepClass, Step::class, 'Step', $container, $logger);
+
+        if (!$step instanceof Step) {
+            throw new ConfigurationException(sprintf(
+                'Configured step class must implement %s: %s',
+                Step::class,
+                $record->stepClass,
+            ));
+        }
+
+        return $step;
     }
 
     abstract public function nextStep(?Step $actStep = null): ?Step;
@@ -413,10 +435,6 @@ abstract class Task {
         $this->updatedAt = $record->updatedAt;
         $this->actualStep = $actualStep;
         $this->queue = $queue;
-
-        if ($this->actualStep !== null) {
-            $this->actualStep->hydrateFromQueueRecord($record);
-        }
 
         $this->logger?->debug('Task hydrated from queue record.', [
             'taskId' => $record->taskId,
@@ -549,9 +567,5 @@ abstract class Task {
         $this->cancelRequested = $record->cancelRequested;
         $this->cancelReason = $record->cancelReason;
         $this->updatedAt = $record->updatedAt;
-
-        if ($this->actualStep !== null) {
-            $this->actualStep->hydrateFromQueueRecord($record);
-        }
     }
 }

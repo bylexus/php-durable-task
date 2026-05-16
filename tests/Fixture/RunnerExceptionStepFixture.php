@@ -8,7 +8,7 @@ use ByLexus\TaskRunner\Result\StepResult;
 use ByLexus\TaskRunner\Step;
 use ByLexus\TaskRunner\Task;
 
-final class RunnerExceptionStepFixture extends Step
+final class RunnerExceptionStepFixture implements Step
 {
     public function execute(Task $task): StepResult {
         throw new \RuntimeException('Step exploded.');

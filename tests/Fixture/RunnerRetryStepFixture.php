@@ -14,7 +14,7 @@ use ByLexus\TaskRunner\Task;
 
 #[RetryModeAttribute(RetryMode::RESTART)]
 #[Retries(1, new \DateInterval('PT0S'))]
-final class RunnerRetryStepFixture extends Step
+final class RunnerRetryStepFixture implements Step
 {
     public function execute(Task $task): StepResult {
         $payload = $task->getPayload();
@@ -33,7 +33,7 @@ final class RunnerRetryStepFixture extends Step
         $payload->completed = true;
 
         return StepResult::succeeded(
-            ['retried' => $this->getStepAttempt() > 0],
+            ['retried' => $task->getStepAttempt() > 0],
             'Step succeeded.',
         );
     }

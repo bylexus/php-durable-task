@@ -8,7 +8,7 @@ use ByLexus\TaskRunner\Result\StepResult;
 use ByLexus\TaskRunner\Step;
 use ByLexus\TaskRunner\Task;
 
-final class GracefulShutdownStepFixture extends Step
+final class GracefulShutdownStepFixture implements Step
 {
     public function execute(Task $task): StepResult {
         usleep(1_500_000);

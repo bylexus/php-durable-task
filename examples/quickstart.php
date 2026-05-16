@@ -1,5 +1,24 @@
 <?php
 
+/**
+ * Quickstart example - defines a Task (GreetingTask class)
+ * and a single Step (PrintGreetingStep) to demonstrate a simple
+ * example:
+ *
+ * - the Task defines the workflow: It defines methods to set/read the
+ *   needed payload data, and defines the step workflow in the nextStep() method.
+ *
+ * - the Step reads the payload needed for its work from the Task and execute its
+ *   behaviour. It then returns a step result when done.
+ *
+ * - below, the main code initiates a TaskEnvironment and a Runner
+ *   to get started at the task.
+ *
+ * Execute with:
+ *
+ * php quickstart.php "Mona Lisa"
+ */
+
 declare(strict_types=1);
 
 namespace ByLexus\TaskRunner\Examples\framework_integration;
@@ -12,49 +31,32 @@ use ByLexus\TaskRunner\Task;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
 
-// Keep connection settings overridable so the example can run unchanged in local setups.
-// The default DSN targets PostgreSQL. quickstart only uses runSingle(), so no
-// notification wakeup is involved; long-running runLoop() workers only get
-// LISTEN / NOTIFY wakeups on PostgreSQL and poll on the other supported backends.
-$dsn = getenv('PHP_TR_DSN') ?: 'pgsql:host=127.0.0.1;port=5432;dbname=php_tr_test';
-$user = getenv('PHP_TR_DB_USER') ?: 'postgres';
-$password = getenv('PHP_TR_DB_PASS') ?: 'postgres';
-
-final class PrintGreetingStep extends Step {
+final class PrintGreetingStep implements Step {
     // Implement the execute function to execute the work:
     public function execute(Task $task): StepResult {
         // Steps read input from the task payload.
-        // It is advisable to use a namespaced payload, as all steps of a task share
-        // the same Payload object. Here, we use the class name as namespace:
-        $name = $this->name($task);
+        $recipient = 'world';
+        if ($task instanceof GreetingTask) {
+            $recipient = $task->recipient();
+        }
 
         // Do the work!
-        fwrite(STDOUT, sprintf("Hello %s from a step.\n", $name));
+        fwrite(STDOUT, sprintf("Hello %s from a step.\n", $recipient));
 
         // and return a result:
         return StepResult::succeeded(message: 'Greeting printed.');
-    }
-
-    // Helper functions to get/set values from the Task's payload:
-    public static function setName(Task $task, string $name) {
-        $task->getPayload(static::class)->name = $name;
-    }
-    public static function name(Task $task): string {
-        return $task->getPayload(static::class)->name ?? 'world';
     }
 }
 
 #[CleanupAfter(new \DateInterval('PT10M'))]
 final class GreetingTask extends Task {
-    public function withName(string $name): self {
-        // The root payload is just a stdClass, so examples can keep setup lightweight.
-        $this->getPayload()->globalValue = 'some global value';
-
-        // You need to know the exact payload path for providing data for later steps:
-        // Here, we use the static function defined in the step PrintGreeting:
-        PrintGreetingStep::setName($this, $name);
-
+    // Helper functions to get/set values from the Task's payload:
+    public function setRecipient(string $recipient): self {
+        $this->getPayload(static::class)->recipient = $recipient;
         return $this;
+    }
+    public function recipient(): string {
+        return $this->getPayload(static::class)->recipient ?? 'world';
     }
 
     // nextStep allows the Task to form a workflow:
@@ -66,15 +68,31 @@ final class GreetingTask extends Task {
     }
 }
 
+// Keep connection settings overridable so the example can run unchanged in local setups.
+// The default DSN targets PostgreSQL. quickstart only uses runSingle(), so no
+// notification wakeup is involved; long-running runLoop() workers only get
+// LISTEN / NOTIFY wakeups on PostgreSQL and poll on the other supported backends.
+$dsn = getenv('EXAMPLE_DATABASE_DSN') ?: 'pgsql:host=127.0.0.1;port=5432;dbname=php_tr_test';
+$user = getenv('EXAMPLE_DATABASE_USER') ?: 'postgres';
+$password = getenv('EXAMPLE_DATABASE_PASSWORD') ?: 'postgres';
+
 $pdo = new \PDO($dsn, $user, $password);
-$env = new TaskEnvironment($pdo);
+
+// Create a Task environment that keeps all the needed context (can be shared):
+$env = new TaskEnvironment(connection: $pdo);
+
 // Quickstart performs an explicit schema bootstrap instead of relying on worker startup side effects.
 $env->getSchemaManager()->bootstrap();
 
+// ---------------------------------  Task creation ------------------------
 // The task owns the payload. Here we seed it before enqueueing the first step.
-$task = (new GreetingTask())->withName($argv[1] ?? 'PHP TR');
+$task = (new GreetingTask())->setRecipient($argv[1] ?? 'PHP TR');
+
+// enqueue the task!
 $record = $env->enqueue($task);
 
+
+// ---------------------------------  Runner ------------------------------
 // A runner claims one queued row, hydrates the task and step, executes them, and persists the result.
 $runner = $env->createRunner();
 

@@ -9,10 +9,9 @@ use ByLexus\TaskRunner\Step;
 use ByLexus\TaskRunner\Task;
 use Psr\Log\LoggerInterface;
 
-final class LoggerInjectedStepFixture extends Step
+final class LoggerInjectedStepFixture implements Step
 {
     public function __construct(private LoggerInterface $injectedLogger) {
-        parent::__construct($injectedLogger);
     }
 
     public function execute(Task $task): StepResult {

@@ -19,7 +19,7 @@ final class ProcessLargeTask extends Task {
 
     public function nextStep(?Step $actStep = null): ?Step {
         if ($actStep === null) {
-            return new ProcessLargeImportStep($this->getLogger());
+            return new ProcessLargeImportStep();
         }
         return null;
     }

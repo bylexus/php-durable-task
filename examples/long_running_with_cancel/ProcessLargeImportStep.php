@@ -9,7 +9,7 @@ use ByLexus\TaskRunner\Result\StepResult;
 use ByLexus\TaskRunner\Step;
 use ByLexus\TaskRunner\Task;
 
-final class ProcessLargeImportStep extends Step {
+final class ProcessLargeImportStep implements Step {
     public function execute(Task $task): StepResult {
         foreach ($this->chunkIds($task) as $chunkId) {
             $task->reload();

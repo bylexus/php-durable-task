@@ -8,7 +8,7 @@ use ByLexus\TaskRunner\Result\StepResult;
 use ByLexus\TaskRunner\Step;
 use ByLexus\TaskRunner\Task;
 
-final class CounterStep extends Step {
+final class CounterStep implements Step {
     public function execute(Task $task): StepResult {
         if (!$task instanceof CounterTask) {
             return StepResult::failed(message: 'Unexpected task type.');

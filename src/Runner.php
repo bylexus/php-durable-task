@@ -271,7 +271,6 @@ class Runner {
             }
 
             $task->setLogger($this->logger);
-            $step->setLogger($this->logger);
 
             $this->logger->info('Runner claimed task for execution.', [
                 'runnerId' => $this->runnerConfiguration->getRunnerId(),
@@ -330,8 +329,6 @@ class Runner {
             }
 
             if ($nextStep !== null) {
-                $nextStep->setLogger($this->logger);
-
                 $this->logger->info('Task selected next step.', [
                     'taskId' => $record->taskId,
                     'taskClass' => $record->taskClass,
@@ -384,7 +381,7 @@ class Runner {
                 'taskId' => $task->getId(),
                 'taskClass' => $task::class,
                 'stepClass' => $step::class,
-                'stepAttempt' => $step->getStepAttempt(),
+                'stepAttempt' => $task->getStepAttempt(),
             ]);
 
             $result = $step->execute($task);
@@ -396,7 +393,7 @@ class Runner {
                 'taskId' => $task->getId(),
                 'taskClass' => $task::class,
                 'stepClass' => $step::class,
-                'stepAttempt' => $step->getStepAttempt(),
+                'stepAttempt' => $task->getStepAttempt(),
                 'stepStatus' => $result->getStatus()->value,
             ];
 

@@ -9,7 +9,7 @@ use ByLexus\TaskRunner\Result\StepResult;
 use ByLexus\TaskRunner\Step;
 use ByLexus\TaskRunner\Task;
 
-final class AttachmentRoundtripStepFixture extends Step
+final class AttachmentRoundtripStepFixture implements Step
 {
     public function execute(Task $task): StepResult {
         $attachment = $task->getPayload()->attachment ?? null;

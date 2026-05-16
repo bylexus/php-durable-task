@@ -7,16 +7,24 @@ use ByLexus\TaskRunner\Result\ErrorInfo;
 use ByLexus\TaskRunner\Result\StepResult;
 use ByLexus\TaskRunner\Step;
 use ByLexus\TaskRunner\Task;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 
-class GetChuckNorrisJokeStep extends Step {
+class GetChuckNorrisJokeStep implements Step {
+    private LoggerInterface $logger;
+
+    public function __construct(?LoggerInterface $logger = null) {
+        $this->logger = $logger ?? new NullLogger();
+    }
+
     public function execute(Task $task): StepResult {
         try {
-            $this->getLogger()->debug("Fetching that chuck joke.....");
+            $this->logger->debug("Fetching that chuck joke.....");
             $json = file_get_contents('https://api.chucknorris.io/jokes/random');
             $joke = json_decode($json);
             $task->getPayload(static::class)->joke = $joke->value ?? '(oops)';
             sleep(rand(0, 4));
-            $this->getLogger()->debug("Fetched that chuck joke!");
+            $this->logger->debug("Fetched that chuck joke!");
             if (!empty($joke)) {
                 return new StepResult(StepStatus::SUCCEEDED);
             }

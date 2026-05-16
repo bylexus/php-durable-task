@@ -10,15 +10,18 @@ use ByLexus\TaskRunner\Step;
 use ByLexus\TaskRunner\Task;
 use PHPMailer\PHPMailer\PHPMailer;
 use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 
-class SendMailStep extends Step {
+class SendMailStep implements Step {
+    private LoggerInterface $logger;
+
     public function __construct(protected PHPMailer $mailer, ?LoggerInterface $logger = null) {
-        parent::__construct(logger: $logger);
+        $this->logger = $logger ?? new NullLogger();
     }
 
     public function execute(Task $task): StepResult {
         try {
-            $this->getLogger()->debug("Sending an email ...");
+            $this->logger->debug("Sending an email ...");
             $payload = $task->getPayload(static::class);
             $this->mailer->clearAllRecipients();
             $this->mailer->clearAddresses();
@@ -36,8 +39,8 @@ class SendMailStep extends Step {
 
                     $tmpFiles[] = $path;
                     $a->toFile($path);
-                    $this->getLogger()->debug("File is present: " . is_file($path));
-                    $this->getLogger()->debug("File size: " . filesize($path));
+                    $this->logger->debug("File is present: " . is_file($path));
+                    $this->logger->debug("File size: " . filesize($path));
                     $this->mailer->addAttachment($path, name: basename($a->name()), type:$a->mimeType());
                 }
             }
@@ -45,7 +48,7 @@ class SendMailStep extends Step {
             foreach ($tmpFiles as $path) {
                 @unlink($path);
             }
-            $this->getLogger()->debug("Sending an email - DONE!");
+            $this->logger->debug("Sending an email - DONE!");
             return new StepResult(StepStatus::SUCCEEDED);
         } catch (\Throwable $t) {
             return StepResult::failed(

@@ -8,7 +8,7 @@ use ByLexus\TaskRunner\Result\StepResult;
 use ByLexus\TaskRunner\Step;
 use ByLexus\TaskRunner\Task;
 
-final class SignalControlledShutdownStepFixture extends Step
+final class SignalControlledShutdownStepFixture implements Step
 {
     public function execute(Task $task): StepResult {
         $startedPath = getenv('PHP_TR_SIGNAL_STARTED_PATH');

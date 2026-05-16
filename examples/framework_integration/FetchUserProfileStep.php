@@ -18,12 +18,11 @@ use Psr\Log\LoggerInterface;
 #[Retries(5)]
 #[RetryModeAttribute(RetryMode::RESTART)]
 #[MaxRuntime(new \DateInterval('PT30S'))]
-final class FetchUserProfileStep extends Step {
+final class FetchUserProfileStep implements Step {
     public function __construct(
         private ExampleUserApi $api,
-        ?LoggerInterface $logger = null,
+        private ?LoggerInterface $logger = null,
     ) {
-        parent::__construct(logger: $logger);
     }
 
     public function execute(Task $task): StepResult {
