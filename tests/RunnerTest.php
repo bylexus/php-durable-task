@@ -95,6 +95,7 @@ final class RunnerTest extends TestCase
     public function testChangesForResultDelaysFailedRetriesUntilRetryDelayHasElapsed(): void {
         $runner = new Runner($this->createTaskEnvironment(new RunnerConfiguration('runner-test')));
         $task = new class extends Task {
+            #[\Override]
             public function nextStep(?\ByLexus\TaskRunner\Step $actStep = null): ?\ByLexus\TaskRunner\Step {
                 return null;
             }
@@ -152,6 +153,148 @@ final class RunnerTest extends TestCase
         self::assertInstanceOf(\DateTimeImmutable::class, $changes['available_at']);
         self::assertGreaterThanOrEqual($before->getTimestamp() + 119, $changes['available_at']->getTimestamp());
         self::assertLessThanOrEqual($before->getTimestamp() + 121, $changes['available_at']->getTimestamp());
+    }
+
+    public function testChangesForResultRetriesFailedStepWhenRetryModeSkipHasAttemptsLeft(): void {
+        $runner = new Runner($this->createTaskEnvironment(new RunnerConfiguration('runner-test')));
+        $task = new class extends Task {
+            #[\Override]
+            public function nextStep(?\ByLexus\TaskRunner\Step $actStep = null): ?\ByLexus\TaskRunner\Step {
+                return null;
+            }
+        };
+        $metadata = new TaskMetadata(
+            new \DateInterval('PT1H'),
+            new \DateInterval('PT0S'),
+            new \DateInterval('P7D'),
+        );
+        $record = $this->makeQueueRecord($task::class, 0);
+
+        /** @var array<string, mixed> $changes */
+        $changes = $this->invokePrivateMethod(
+            $runner,
+            'changesForResult',
+            $record,
+            $task,
+            StepResult::failed(new ErrorInfo(500, 'boom')),
+            null,
+            $metadata,
+            RetryMode::SKIP,
+            2,
+            new \DateInterval('PT0S'),
+        );
+
+        self::assertSame('queued', $changes['task_status']->value);
+        self::assertSame('queued', $changes['step_status']->value);
+        self::assertSame(1, $changes['step_attempt']);
+        self::assertArrayNotHasKey('task_finished_at', $changes);
+    }
+
+    public function testChangesForResultSkipsToNextStepWhenRetryModeSkipExhaustsRetries(): void {
+        $runner = new Runner($this->createTaskEnvironment(new RunnerConfiguration('runner-test')));
+        $task = new class extends Task {
+            #[\Override]
+            public function nextStep(?\ByLexus\TaskRunner\Step $actStep = null): ?\ByLexus\TaskRunner\Step {
+                return null;
+            }
+        };
+        $metadata = new TaskMetadata(
+            new \DateInterval('PT1H'),
+            new \DateInterval('PT0S'),
+            new \DateInterval('P7D'),
+        );
+        $record = $this->makeQueueRecord($task::class, 2);
+        $nextStep = new class implements \ByLexus\TaskRunner\Step {
+            #[\Override]
+            public function execute(Task $task): StepResult {
+                return StepResult::succeeded();
+            }
+        };
+
+        /** @var array<string, mixed> $changes */
+        $changes = $this->invokePrivateMethod(
+            $runner,
+            'changesForResult',
+            $record,
+            $task,
+            StepResult::failed(new ErrorInfo(500, 'boom')),
+            $nextStep,
+            $metadata,
+            RetryMode::SKIP,
+            2,
+            new \DateInterval('PT0S'),
+        );
+
+        self::assertSame('queued', $changes['task_status']->value);
+        self::assertSame('queued', $changes['step_status']->value);
+        self::assertSame(0, $changes['step_attempt']);
+        self::assertSame($nextStep::class, $changes['step_class']);
+        self::assertArrayNotHasKey('task_finished_at', $changes);
+    }
+
+    public function testChangesForResultSucceedsWithSkippedStatusWhenSkipExhaustsRetriesAndNoNextStep(): void {
+        $runner = new Runner($this->createTaskEnvironment(new RunnerConfiguration('runner-test')));
+        $task = new class extends Task {
+            #[\Override]
+            public function nextStep(?\ByLexus\TaskRunner\Step $actStep = null): ?\ByLexus\TaskRunner\Step {
+                return null;
+            }
+        };
+        $metadata = new TaskMetadata(
+            new \DateInterval('PT1H'),
+            new \DateInterval('PT0S'),
+            new \DateInterval('P7D'),
+        );
+        $record = $this->makeQueueRecord($task::class, 2);
+
+        /** @var array<string, mixed> $changes */
+        $changes = $this->invokePrivateMethod(
+            $runner,
+            'changesForResult',
+            $record,
+            $task,
+            StepResult::failed(new ErrorInfo(500, 'boom')),
+            null,
+            $metadata,
+            RetryMode::SKIP,
+            2,
+            new \DateInterval('PT0S'),
+        );
+
+        self::assertSame('succeeded', $changes['task_status']->value);
+        self::assertSame('skipped', $changes['step_status']->value);
+        self::assertInstanceOf(\DateTimeImmutable::class, $changes['task_finished_at']);
+        self::assertInstanceOf(\DateTimeImmutable::class, $changes['cleanup_at']);
+    }
+
+    private function makeQueueRecord(string $taskClass, int $stepAttempt): QueueRecord {
+        $recordedAt = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+
+        return new QueueRecord(
+            123,
+            $taskClass,
+            null,
+            'queued',
+            $recordedAt,
+            null,
+            null,
+            null,
+            'failed',
+            $stepAttempt,
+            null,
+            null,
+            (object) ['job' => 'demo'],
+            null,
+            null,
+            $recordedAt,
+            null,
+            null,
+            null,
+            null,
+            false,
+            null,
+            $recordedAt,
+        );
     }
 
     public function testRunnerThrottlesExpiredQueueCleanupToEveryTenSeconds(): void {

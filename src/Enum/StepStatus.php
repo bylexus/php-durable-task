@@ -10,4 +10,5 @@ enum StepStatus: string {
     case SUCCEEDED = 'succeeded';
     case FAILED = 'failed';
     case CANCELLED = 'cancelled';
+    case SKIPPED = 'skipped';
 }

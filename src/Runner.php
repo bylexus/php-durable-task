@@ -739,9 +739,11 @@ class Runner {
             'claimed_by' => null,
         ];
 
+        $isRetriableMode = $retryMode === RetryMode::RESTART || $retryMode === RetryMode::SKIP;
+
         if (
             $result->getStatus() === StepStatus::FAILED
-            && $retryMode === \ByLexus\TaskRunner\Enum\RetryMode::RESTART
+            && $isRetriableMode
             && $record->stepAttempt < $retries
         ) {
             $this->logger->warning('Runner requeued failed step for retry.', [
@@ -750,6 +752,7 @@ class Runner {
                 'taskClass' => $record->taskClass,
                 'stepClass' => $record->stepClass,
                 'stepAttempt' => $record->stepAttempt + 1,
+                'retryMode' => $retryMode->value,
             ]);
 
             $changes['task_status'] = TaskStatus::QUEUED;
@@ -758,6 +761,48 @@ class Runner {
             $changes['step_started_at'] = null;
             $changes['step_finished_at'] = null;
             $changes['available_at'] = $now->add($retryDelay);
+
+            return $changes;
+        }
+
+        if (
+            $result->getStatus() === StepStatus::FAILED
+            && $retryMode === RetryMode::SKIP
+        ) {
+            if ($nextStep !== null) {
+                $this->logger->warning('Runner skipped failed step and queued next step.', [
+                    'runnerId' => $this->runnerConfiguration->getRunnerId(),
+                    'taskId' => $record->taskId,
+                    'taskClass' => $record->taskClass,
+                    'stepClass' => $record->stepClass,
+                    'nextStepClass' => $nextStep::class,
+                ]);
+
+                $changes['task_status'] = TaskStatus::QUEUED;
+                $changes['step_class'] = $nextStep::class;
+                $changes['step_status'] = StepStatus::QUEUED;
+                $changes['step_attempt'] = 0;
+                $changes['step_started_at'] = null;
+                $changes['step_finished_at'] = null;
+                $changes['available_at'] = $now;
+
+                return $changes;
+            }
+
+            $this->logger->warning('Runner skipped failed final step and marked task as succeeded.', [
+                'runnerId' => $this->runnerConfiguration->getRunnerId(),
+                'taskId' => $record->taskId,
+                'taskClass' => $record->taskClass,
+                'stepClass' => $record->stepClass,
+            ]);
+
+            $changes['task_finished_at'] = $now;
+            $changes['step_finished_at'] = $now;
+            $changes['cleanup_at'] = $now->add(
+                $this->resolveCleanupAfterIntervalForStatus($taskMetadata, StepStatus::SUCCEEDED),
+            );
+            $changes['task_status'] = TaskStatus::SUCCEEDED;
+            $changes['step_status'] = StepStatus::SKIPPED;
 
             return $changes;
         }

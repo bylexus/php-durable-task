@@ -29,7 +29,7 @@ final class EnumTest extends TestCase
 
     public function testStepStatusCasesMatchPlan(): void {
         self::assertSame(
-            ['queued', 'running', 'succeeded', 'failed', 'cancelled'],
+            ['queued', 'running', 'succeeded', 'failed', 'cancelled', 'skipped'],
             array_column(StepStatus::cases(), 'value'),
         );
     }
