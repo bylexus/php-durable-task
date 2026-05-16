@@ -106,28 +106,54 @@ class Runner {
         $this->ensureNotificationListener();
 
         while (true) {
-            $this->cleanupExpiredQueueRecordsIfDue();
+            try {
+                $this->cleanupExpiredQueueRecordsIfDue();
 
-            $record = $this->queue->claim($this->runnerConfiguration->getRunnerId());
+                $record = $this->queue->claim($this->runnerConfiguration->getRunnerId());
 
-            if ($record === null) {
+                if ($record === null) {
+                    if ($this->signalHandler->isStopRequested()) {
+                        break;
+                    }
+
+                    $this->waitForNotification();
+
+                    if ($this->signalHandler->isStopRequested()) {
+                        break;
+                    }
+
+                    continue;
+                }
+
+                $this->processClaimedRecord($record);
+
                 if ($this->signalHandler->isStopRequested()) {
                     break;
                 }
+            } catch (\Throwable $throwable) {
+                if ($this->connection->inTransaction()) {
+                    try {
+                        $this->connection->rollBack();
+                    } catch (\Throwable $rollbackThrowable) {
+                        $this->logger->error('Runner failed to roll back transaction after loop error.', [
+                            'runnerId' => $this->runnerConfiguration->getRunnerId(),
+                            'exceptionClass' => $rollbackThrowable::class,
+                            'errorCode' => (int) $rollbackThrowable->getCode(),
+                            'errorMessage' => $rollbackThrowable->getMessage(),
+                        ]);
+                    }
+                }
 
-                $this->waitForNotification();
+                $this->logger->error('Runner loop caught unhandled exception; continuing.', [
+                    'runnerId' => $this->runnerConfiguration->getRunnerId(),
+                    'exceptionClass' => $throwable::class,
+                    'errorCode' => (int) $throwable->getCode(),
+                    'errorMessage' => $throwable->getMessage(),
+                ]);
 
                 if ($this->signalHandler->isStopRequested()) {
                     break;
                 }
-
-                continue;
-            }
-
-            $this->processClaimedRecord($record);
-
-            if ($this->signalHandler->isStopRequested()) {
-                break;
             }
         }
 
