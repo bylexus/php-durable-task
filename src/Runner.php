@@ -61,9 +61,9 @@ class Runner {
         ]);
     }
 
-    public function runSingle(): int {
+    public function runSingle(?string $runnerId = null): int {
         $this->logger->debug('Runner single pass started.', [
-            'runnerId' => $this->runnerConfiguration->getRunnerId(),
+            'runnerId' => $runnerId ?: $this->runnerConfiguration->getRunnerId(),
         ]);
         $this->bootstrapSchemaIfConfigured();
         $this->signalHandler->register();
@@ -97,9 +97,9 @@ class Runner {
         return $processed;
     }
 
-    public function runLoop(): void {
+    public function runLoop(?string $runnerId = null): void {
         $this->logger->info('Runner loop started.', [
-            'runnerId' => $this->runnerConfiguration->getRunnerId(),
+            'runnerId' => $runnerId ?: $this->runnerConfiguration->getRunnerId(),
         ]);
         $this->bootstrapSchemaIfConfigured();
         $this->signalHandler->register();
